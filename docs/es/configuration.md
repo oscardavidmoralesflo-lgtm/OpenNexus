@@ -2,7 +2,7 @@
 
 > Read in English: [configuration.md](../en/configuration.md)
 
-OpenLivery se configura mediante variables de entorno. En Docker, todas viven en un único archivo `.env.docker` en la raíz del repositorio; un script auxiliar lo genera con secretos aleatorios robustos para que nunca tengas que inventarlos.
+OpenNexus se configura mediante variables de entorno. En Docker, todas viven en un único archivo `.env.docker` en la raíz del repositorio; un script auxiliar lo genera con secretos aleatorios robustos para que nunca tengas que inventarlos.
 
 ## El archivo .env.docker
 

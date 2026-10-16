@@ -14,7 +14,7 @@ An HTTP tool describes one endpoint the agent may call:
 - **Body and query parameters** — each parameter has a name, a type (`string`, `number`, `integer`, `boolean`), a description and a required flag. Body parameters are only allowed on POST, PUT and PATCH.
 - **Advanced options** — auth headers (for example `Authorization: Bearer …`) and a timeout between 1 and 120 seconds (default 30). Header values are **encrypted at rest** and never returned by the API or shown in the UI again; you can only replace them.
 
-When the model calls the tool, OpenLivery substitutes the path placeholders, sends the declared query parameters and JSON body, and returns the response to the model as `HTTP <status>: <body>`. Responses are capped at 100 KB.
+When the model calls the tool, OpenNexus substitutes the path placeholders, sends the declared query parameters and JSON body, and returns the response to the model as `HTTP <status>: <body>`. Responses are capped at 100 KB.
 
 ## MCP servers
 
@@ -30,7 +30,7 @@ Once the tools are listed you choose which ones the agent may call. Every tool i
 
 ## How tool calling works
 
-When an agent with enabled tools receives a message, OpenLivery sends the tool definitions to the model along with the conversation. If the model decides to call a tool, OpenLivery executes it (the HTTP request, or a call proxied to the MCP server), feeds the result back, and lets the model continue — up to **5 rounds** per reply, after which the model must answer with text. Tools travel as chat-completions function definitions, which is what OpenRouter speaks for every vendor, so any tool-capable model works. Token usage and cost across all rounds are summed into the reply's usage record.
+When an agent with enabled tools receives a message, OpenNexus sends the tool definitions to the model along with the conversation. If the model decides to call a tool, OpenNexus executes it (the HTTP request, or a call proxied to the MCP server), feeds the result back, and lets the model continue — up to **5 rounds** per reply, after which the model must answer with text. Tools travel as chat-completions function definitions, which is what OpenRouter speaks for every vendor, so any tool-capable model works. Token usage and cost across all rounds are summed into the reply's usage record.
 
 Every assistant reply stores which tools ran, with their arguments and a preview of each result. In the playground you will see a chip under the reply listing the tools used; failed calls are highlighted and show the error detail, so you can diagnose a broken tool without reading logs.
 

@@ -2,7 +2,7 @@
 
 > Leer en español: [push-notifications.md](../es/push-notifications.md)
 
-OpenLivery ships the notification *plumbing* and no notification *provider*.
+OpenNexus ships the notification *plumbing* and no notification *provider*.
 There is no account to create, no third party involved, and nothing to pay for
 in a default install: `PUSH_PROVIDER` is `none` and the server sends nothing.
 
@@ -18,7 +18,7 @@ an app that was built against the provider that server sends through.
 
 The practical consequence:
 
-- **You run your own OpenLivery and use the official OpenLivery app from the
+- **You run your own OpenNexus and use the official OpenNexus app from the
   store.** That app can read and answer everything on your server perfectly
   well, but it cannot receive push from it — the store build only accepts
   notifications from the credentials it was signed with, which belong to whoever
@@ -61,7 +61,7 @@ five-line script that calls whatever service you already pay for.
 
 ```bash
 PUSH_PROVIDER=webhook
-PUSH_WEBHOOK_URL=https://example.com/openlivery-push
+PUSH_WEBHOOK_URL=https://example.com/opennexus-push
 PUSH_WEBHOOK_SECRET=a-shared-secret   # optional; sent as a Bearer token
 ```
 

@@ -1,4 +1,4 @@
-# OpenLivery documentation
+# OpenNexus documentation
 
 Every guide lives here, in the repository, so a change to the product and the
 change to its documentation travel in the same pull request. Guides are written

@@ -34,7 +34,7 @@ import type { ContactValues } from "@/lib/contact-variables";
 
 const POLL_MS = 8000;
 // The side panel folded to its icons, remembered per browser like the agency's.
-const NAV_COLLAPSED_KEY = "openlivery.portal.nav.collapsed";
+const NAV_COLLAPSED_KEY = "opennexus.portal.nav.collapsed";
 
 function chime() {
   try {

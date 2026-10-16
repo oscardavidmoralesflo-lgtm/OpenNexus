@@ -2,13 +2,13 @@
 
 > Leer en español: [whatsapp-cloud-api.md](../es/whatsapp-cloud-api.md)
 
-This guide walks through connecting a client's WhatsApp number to OpenLivery
+This guide walks through connecting a client's WhatsApp number to OpenNexus
 using the official **WhatsApp Business Cloud API** (hosted by Meta): from
-creating the Meta app to pasting the credentials into OpenLivery and going
+creating the Meta app to pasting the credentials into OpenNexus and going
 live. It is independent from the WhatsApp QR channel — a client can have both
 connected on different numbers.
 
-At the end you will have entered four values into OpenLivery:
+At the end you will have entered four values into OpenNexus:
 
 | Value | Where it comes from |
 | --- | --- |
@@ -28,10 +28,10 @@ Before the technical setup, make sure you have:
     to cover conversation costs.
 - A phone number that can receive an SMS or voice verification call and is
   **not** currently registered on the WhatsApp/WhatsApp Business apps.
-- An OpenLivery instance reachable over **public HTTPS** (Meta only delivers
+- An OpenNexus instance reachable over **public HTTPS** (Meta only delivers
   webhooks to HTTPS URLs), with the client created and an agent assigned to it.
 - **One Meta app per client.** A Meta app has a single callback URL, and
-  OpenLivery gives each channel its own, so an app cannot serve two clients:
+  OpenNexus gives each channel its own, so an app cannot serve two clients:
   whichever URL you register is the only one that receives. Traffic arriving for
   a number that does not belong to the channel is ignored rather than answered
   by the wrong agent, so a shared app looks like messages never arriving.
@@ -54,8 +54,8 @@ Before the technical setup, make sure you have:
      provide a more specific, non-generic one.
 4. Complete the **SMS or voice verification** for the number.
 5. Copy the **Phone number ID** shown on this screen — you will paste it into
-   OpenLivery. The **WhatsApp Business account ID** (WABA ID) appears on the
-   same screen and is optional in OpenLivery.
+   OpenNexus. The **WhatsApp Business account ID** (WABA ID) appears on the
+   same screen and is optional in OpenNexus.
 
 ## 4. Generate a permanent access token
 
@@ -70,19 +70,19 @@ connection, create one through a system user:
    - `whatsapp_business_messaging`
    - `whatsapp_business_management`
 5. **Copy the token immediately and store it safely** — Meta will not show it
-   again. This is the **Permanent access token** for OpenLivery.
+   again. This is the **Permanent access token** for OpenNexus.
 
 ## 5. Get the app secret
 
 1. In the App Dashboard go to **App settings > Basic**.
 2. Click **Show** next to **App secret** and copy it.
 
-OpenLivery uses the app secret to validate the HMAC signature of every
+OpenNexus uses the app secret to validate the HMAC signature of every
 webhook Meta sends, so requests that are not really from Meta are rejected.
 
-## 6. Enter the credentials in OpenLivery
+## 6. Enter the credentials in OpenNexus
 
-1. In OpenLivery open **Clients**, pick the client, and on its **Channels**
+1. In OpenNexus open **Clients**, pick the client, and on its **Channels**
    tab open the **WhatsApp API** card (also reachable from the **Channels**
    page).
 2. Select the **agent** that will answer this number.
@@ -97,7 +97,7 @@ webhook Meta sends, so requests that are not really from Meta are rejected.
 
 ## 7. Register the webhook
 
-Still on the channel page, OpenLivery shows a **Callback URL** and a
+Still on the channel page, OpenNexus shows a **Callback URL** and a
 **Verify token** with copy buttons:
 
 1. In the Meta Developer Portal go to **WhatsApp > Configuration**.
@@ -113,26 +113,26 @@ Still on the channel page, OpenLivery shows a **Callback URL** and a
 
 ## 8. Connect and go live
 
-1. Back in OpenLivery click **Connect and verify**. OpenLivery validates the
+1. Back in OpenNexus click **Connect and verify**. OpenNexus validates the
    credentials against the Graph API and captures the number and its verified
    name; the channel status changes to **connected**.
 2. In the Developer Portal switch the **App Mode** from **Development** to
    **Live** (top bar) so real customer traffic can flow.
 3. Send a WhatsApp message to the number: the assigned agent should answer,
-   and the conversation appears in the OpenLivery Inbox.
+   and the conversation appears in the OpenNexus Inbox.
 
 ## 9. Troubleshooting
 
 - **Authorization error** — usually an expired token or missing permissions
   (`whatsapp_business_messaging`). Generate a new permanent token (step 4)
-  and save it again in OpenLivery.
+  and save it again in OpenNexus.
 - **Display name pending or rejected** — make sure the display name matches
   the legal business name or the website branding.
 - **Payment required** — the payment method must be assigned specifically to
   the **WhatsApp account** in Business Suite, not just to the general Ad
   Account.
 - **Webhook verification fails** — the verify token pasted in Meta must match
-  the one OpenLivery shows exactly, and the callback URL must be reachable
+  the one OpenNexus shows exactly, and the callback URL must be reachable
   from the internet over HTTPS. On self-hosted instances, check that
   `FRONTEND_URL` points to the public address of the app.
 - **No messages arrive** — confirm the number in the payload belongs to this
@@ -141,7 +141,7 @@ Still on the channel page, OpenLivery shows a **Callback URL** and a
   [Prerequisites](#1-prerequisites)). Then confirm the subscription to the
   **`messages`** webhook field (step 7), and that the app is in **Live** mode; in
   Development mode Meta only delivers traffic from test numbers. The channel
-  card in OpenLivery shows the last webhook error, if any.
+  card in OpenNexus shows the last webhook error, if any.
 - **Messages arrive but the agent does not answer** — the channel is
   connected but the assigned agent may be inactive or missing its provider
   API key; the channel card shows the exact reason under **last error**.

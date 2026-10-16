@@ -2,7 +2,7 @@
 
 > Read in English: [contributing.md](../en/contributing.md)
 
-Docker es la forma más rápida de ejecutar OpenLivery, pero para el desarrollo diario normalmente querrás cada servicio corriendo en tu máquina con recarga en caliente. Esta guía cubre cómo ejecutar el backend, el frontend y el puente de WhatsApp localmente, las suites de pruebas, las migraciones y las convenciones del proyecto.
+Docker es la forma más rápida de ejecutar OpenNexus, pero para el desarrollo diario normalmente querrás cada servicio corriendo en tu máquina con recarga en caliente. Esta guía cubre cómo ejecutar el backend, el frontend y el puente de WhatsApp localmente, las suites de pruebas, las migraciones y las convenciones del proyecto.
 
 ## Alcance de la instalación
 
@@ -17,8 +17,8 @@ y los datos existentes al modificar la configuración inicial o el acceso.
 Clona el repositorio y activa el guard de pre-commit una vez por clon:
 
 ```bash
-git clone https://github.com/sarrazola/openlivery.git
-cd openlivery
+git clone https://github.com/oscardavidmoralesflo-lgtm/OpenNexus.git
+cd opennexus
 git config core.hooksPath .githooks
 ```
 
@@ -58,12 +58,12 @@ El puente es un único binario de Go (Go 1.27+); no hay paso de instalación. Ej
 
 ## Pruebas
 
-Las pruebas del backend necesitan una base de datos **separada** — nunca las apuntes a tu base de datos de desarrollo. Por defecto usan `openlivery_test` en localhost y crean/eliminan todas las tablas por prueba. Cambia el destino con `TEST_DATABASE_URL`:
+Las pruebas del backend necesitan una base de datos **separada** — nunca las apuntes a tu base de datos de desarrollo. Por defecto usan `opennexus_test` en localhost y crean/eliminan todas las tablas por prueba. Cambia el destino con `TEST_DATABASE_URL`:
 
 ```bash
 cd apps/api
 pytest -q
-TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/openlivery_test pytest -q
+TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/opennexus_test pytest -q
 ```
 
 Ejecuta una sola prueba por su identificador:
@@ -94,7 +94,7 @@ Todo el código, los identificadores, los comentarios, los mensajes de commit y 
 
 ## Puntos de extensión
 
-Un despliegue que opere OpenLivery para terceros puede necesitar agregarle cosas
+Un despliegue que opere OpenNexus para terceros puede necesitar agregarle cosas
 sin hacer fork. Estos son los lugares pensados para eso, y se mantienen estables
 a propósito; cambiar su forma es un breaking change y lleva una línea en el
 changelog:

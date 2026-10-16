@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   assign:
-    if: github.repository == 'sarrazola/openlivery'
+    if: github.repository == 'oscardavidmoralesflo-lgtm/OpenNexus'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -31,7 +31,7 @@ jobs:
           while IFS= read -r number; do
             [[ "$number" =~ ^[0-9]+$ ]] || continue
             gh api --method POST "repos/$GH_REPO/issues/$number/assignees" \
-              -f 'assignees[]=sarrazola' \
+              -f 'assignees[]=oscardavidmoralesflo-lgtm' \
               -f 'assignees[]=juanpabloortizo' \
               --jq '"PR #\(.number): \([.assignees[].login] | join(", "))"'
           done <<< "$numbers"

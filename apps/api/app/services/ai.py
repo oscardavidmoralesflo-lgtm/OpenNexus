@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 # Attribution headers OpenRouter reads to label the app in its logs.
-APP_HEADERS = {"HTTP-Referer": "https://github.com/sarrazola/openlivery", "X-Title": "OpenLivery"}
+APP_HEADERS = {"HTTP-Referer": "https://github.com/oscardavidmoralesflo-lgtm/OpenNexus", "X-Title": "OpenNexus"}
 
 
 @dataclass

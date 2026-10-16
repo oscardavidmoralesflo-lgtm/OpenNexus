@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-test_database=${POSTGRES_TEST_DB:-openlivery_test}
+test_database=${POSTGRES_TEST_DB:-opennexus_test}
 exists=$(psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --tuples-only --no-align \
   --command "SELECT 1 FROM pg_database WHERE datname = '$test_database'")
 

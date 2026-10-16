@@ -21,7 +21,7 @@ const navigation: { href: string; labelKey: I18nKey; icon: typeof LayoutDashboar
 const settingsEntry = { href: "/settings", labelKey: "nav.settings" as I18nKey, icon: Settings };
 
 // The sidebar can fold to its icons; the choice is kept per browser.
-const COLLAPSED_KEY = "openlivery.sidebar.collapsed";
+const COLLAPSED_KEY = "opennexus.sidebar.collapsed";
 
 // Extra path prefixes served without a session (comma-separated, baked at
 // build). Lets a deployment add public pages without patching the shell.
@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   if (isBare) return <>{children}</>;
-  if (loading || !user) return <div className="app-loader"><span className="openlivery-icon"><img src="/brand/openlivery-logo-original.png" alt="" /></span><span>{t("shell.loading")}</span></div>;
+  if (loading || !user) return <div className="app-loader"><span className="opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><span>{t("shell.loading")}</span></div>;
 
   const workspaceLabel = <div className="sidebar-workspace">{user.agency.logo_url ? <img src={user.agency.logo_url} alt="" /> : <Building2 size={14} />}<span>{user.agency.name}</span></div>;
   const WorkspaceLabel = appShellExtensions.WorkspaceLabel;
@@ -111,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
         <button type="button" className="sidebar-toggle" onClick={toggleCollapsed} aria-label={collapsed ? t("shell.expandMenu") : t("shell.collapseMenu")} title={collapsed ? t("shell.expandMenu") : t("shell.collapseMenu")}>{collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}</button>
         <div className="brand-row">
-          <Link href="/" className="brand"><span className="openlivery-icon"><img src="/brand/openlivery-logo-original.png" alt="" /></span><span>OpenLivery</span></Link>
+          <Link href="/" className="brand"><span className="opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><span>OpenNexus</span></Link>
           <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label={t("shell.closeMenu")}><X /></button>
         </div>
         {WorkspaceLabel ? <WorkspaceLabel user={user}>{workspaceLabel}</WorkspaceLabel> : workspaceLabel}

@@ -44,7 +44,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/openlivery-${{ matrix.service }}
+          images: ghcr.io/${{ github.repository_owner }}/opennexus-${{ matrix.service }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag

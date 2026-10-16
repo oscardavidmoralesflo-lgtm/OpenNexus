@@ -8,7 +8,7 @@ integration:
 * ``PushDevice`` rows say *where* to reach an install.
 * A provider is one function that takes a :class:`Notification` and delivers it.
 * ``PUSH_PROVIDER`` selects one. The default is ``none`` — a self-hosted
-  OpenLivery sends nothing, needs no account anywhere, and costs nothing.
+  OpenNexus sends nothing, needs no account anywhere, and costs nothing.
 
 Two providers ship here because neither ties you to a company:
 

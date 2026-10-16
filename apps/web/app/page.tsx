@@ -16,7 +16,7 @@ type TopAgent = { id: string; name: string; conversations: number };
 type ModelUsage = { model: string; input_tokens: number; output_tokens: number };
 type Metrics = { messages: number; human_conversations: number; by_channel: Record<string, number>; daily_conversations: DailyPoint[]; top_agents: TopAgent[]; tokens_in: number; tokens_out: number; usage_by_model: ModelUsage[] };
 
-const STEPS_HIDDEN_KEY = "openlivery.home.nextStepsHidden";
+const STEPS_HIDDEN_KEY = "opennexus.home.nextStepsHidden";
 
 export default function HomePage() {
   const { t, lang } = useLanguage();

@@ -74,7 +74,7 @@ export function ConversationExplorer({ basePath, scope, options, onOpen }: {
 }) {
   const { t, lang } = useLanguage();
   const locale = lang === "es" ? "es" : "en";
-  const storageKey = `openlivery.reports.columns.${scope}`;
+  const storageKey = `opennexus.reports.columns.${scope}`;
   const allowed = useMemo(() => COLUMNS.filter((c) => (scope === "agency" ? !PORTAL_ONLY.includes(c) : !AGENCY_ONLY.includes(c))), [scope]);
 
   const [range, setRange] = useState<Range>("7");

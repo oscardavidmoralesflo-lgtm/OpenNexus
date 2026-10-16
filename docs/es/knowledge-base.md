@@ -2,7 +2,7 @@
 
 > Read in English: [knowledge-base.md](../en/knowledge-base.md)
 
-La base de conocimiento es la forma de dar a un agente los datos del negocio que necesita para responder con precisión. Añades conocimiento desde dos tipos de fuentes y OpenLivery ensambla las partes relevantes en el prompt de sistema del agente en cada mensaje.
+La base de conocimiento es la forma de dar a un agente los datos del negocio que necesita para responder con precisión. Añades conocimiento desde dos tipos de fuentes y OpenNexus ensambla las partes relevantes en el prompt de sistema del agente en cada mensaje.
 
 ## Fuentes de conocimiento
 
@@ -17,10 +17,10 @@ Cuando subes un PDF, su texto se extrae de inmediato con `pypdf` y se guarda en 
 
 ## Cómo funciona la recuperación
 
-En cada mensaje entrante, OpenLivery decide cuánto texto de documentos incluir:
+En cada mensaje entrante, OpenNexus decide cuánto texto de documentos incluir:
 
 - **Las bases de conocimiento pequeñas se envían completas.** Cuando el texto extraído combinado de todos los documentos procesados es igual o menor a **45.000 caracteres**, cada documento se incluye textualmente, sin paso de búsqueda.
-- **Las bases de conocimiento más grandes se recuperan.** Por encima de ese umbral, OpenLivery ejecuta una búsqueda semántica: convierte la consulta del usuario en un vector con el modelo del agente y ordena por similitud de coseno los fragmentos indexados con ese mismo modelo, se queda con los diez mejores y descarta los que puntúan muy por debajo del primero, dentro de un presupuesto de búsqueda. Si los embeddings no están disponibles, recurre al ranking por palabras clave sobre los fragmentos.
+- **Las bases de conocimiento más grandes se recuperan.** Por encima de ese umbral, OpenNexus ejecuta una búsqueda semántica: convierte la consulta del usuario en un vector con el modelo del agente y ordena por similitud de coseno los fragmentos indexados con ese mismo modelo, se queda con los diez mejores y descarta los que puntúan muy por debajo del primero, dentro de un presupuesto de búsqueda. Si los embeddings no están disponibles, recurre al ranking por palabras clave sobre los fragmentos.
 
 Los embeddings se guardan como un simple **arreglo JSON de números** y la similitud se calcula en Python, por lo que **no se requiere ninguna extensión de base de datos** — la base de conocimiento es portable en cualquier PostgreSQL. Consulta [Proveedores de IA](ai-providers.md) para configurar la conexión usada para los embeddings.
 

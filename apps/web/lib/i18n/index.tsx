@@ -9,7 +9,7 @@ export type Lang = "en" | "es";
 
 const dictionaries = { en, es };
 const DEFAULT_LANG: Lang = "en";
-const STORAGE_KEY = "openlivery.lang";
+const STORAGE_KEY = "opennexus.lang";
 
 // All valid dotted key paths derived from the dictionary shape. A typo in a
 // t("…") call becomes a TypeScript error instead of a silent runtime fallback.
@@ -63,7 +63,7 @@ function detectBrowserLang(): Lang {
 
 function readStoredLang(): Lang {
   if (typeof document === "undefined") return DEFAULT_LANG;
-  const match = document.cookie.match(/(?:^|;\s*)openlivery\.lang=(en|es)/);
+  const match = document.cookie.match(/(?:^|;\s*)opennexus\.lang=(en|es)/);
   if (match) return match[1] as Lang;
   const stored = window.localStorage.getItem(STORAGE_KEY);
   if (stored === "es" || stored === "en") return stored;
@@ -84,7 +84,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const setLang = useCallback((next: Lang) => {
     setLangState(next);
     window.localStorage.setItem(STORAGE_KEY, next);
-    document.cookie = `openlivery.lang=${next}; path=/; max-age=31536000; samesite=lax`;
+    document.cookie = `opennexus.lang=${next}; path=/; max-age=31536000; samesite=lax`;
     document.documentElement.lang = next;
   }, []);
 

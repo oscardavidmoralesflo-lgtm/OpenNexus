@@ -2,17 +2,17 @@
 
 > Leer en español: [ai-providers.md](../es/ai-providers.md)
 
-OpenLivery does not ship with an AI provider of its own. Each agency brings its own key: you paste an **OpenRouter** API key, OpenLivery stores it encrypted, and every agent under that agency uses it to talk to any model OpenRouter offers. This keeps you in control of billing, quotas and data, and gives every agent the same door to OpenAI, Anthropic, Google, DeepSeek, xAI and the rest.
+OpenNexus does not ship with an AI provider of its own. Each agency brings its own key: you paste an **OpenRouter** API key, OpenNexus stores it encrypted, and every agent under that agency uses it to talk to any model OpenRouter offers. This keeps you in control of billing, quotas and data, and gives every agent the same door to OpenAI, Anthropic, Google, DeepSeek, xAI and the rest.
 
 ## Bring your own key
 
-Keys are configured per agency. Open **Settings**, find the OpenRouter card and paste your key (create one at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)). When you save it, OpenLivery first validates the key against OpenRouter (it asks `{base_url}/key`, which describes the key and its remaining credit); if the check fails, nothing is stored. Only after a successful validation is the key persisted.
+Keys are configured per agency. Open **Settings**, find the OpenRouter card and paste your key (create one at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)). When you save it, OpenNexus first validates the key against OpenRouter (it asks `{base_url}/key`, which describes the key and its remaining credit); if the check fails, nothing is stored. Only after a successful validation is the key persisted.
 
 Stored keys are never returned to the browser in full — the UI only shows a masked value. On disk, the key is encrypted with a key derived from `ENCRYPTION_KEY` and decrypted on demand when an agent needs it, so rotating or losing that secret makes the stored key unreadable. See [Configuration](configuration.md) for how `ENCRYPTION_KEY` is set and why it must never change.
 
 ## How requests are made
 
-OpenLivery calls OpenRouter's OpenAI-compatible API at `https://openrouter.ai/api/v1`:
+OpenNexus calls OpenRouter's OpenAI-compatible API at `https://openrouter.ai/api/v1`:
 
 | Capability | Endpoint |
 | --- | --- |
@@ -21,7 +21,7 @@ OpenLivery calls OpenRouter's OpenAI-compatible API at `https://openrouter.ai/ap
 | Voice note transcription | `/audio/transcriptions` |
 | Knowledge base embeddings | `/embeddings` (`openai/text-embedding-3-small`) |
 
-Every chat reply comes back with OpenRouter's usage block, including what the call cost. OpenLivery stores that figure with the reply's usage record (`usage_records.cost_usd`), so cost reporting reads real numbers instead of estimating from a price table.
+Every chat reply comes back with OpenRouter's usage block, including what the call cost. OpenNexus stores that figure with the reply's usage record (`usage_records.cost_usd`), so cost reporting reads real numbers instead of estimating from a price table.
 
 ## Model ids
 

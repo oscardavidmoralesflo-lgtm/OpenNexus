@@ -7,7 +7,7 @@ import { DiscordIcon } from "@/components/discord-icon";
 import { GithubIcon } from "@/components/github-icon";
 import { COMMUNITY_LINKS, DISCORD_INVITE_URL, GITHUB_REPO, GITHUB_REPO_URL } from "@/lib/community";
 
-const STARS_CACHE_KEY = `openlivery:github-stars:${GITHUB_REPO}`;
+const STARS_CACHE_KEY = `opennexus:github-stars:${GITHUB_REPO}`;
 const STARS_TTL_MS = 60 * 60 * 1000;
 
 // GitHub's public API allows 60 unauthenticated calls per hour per address, so

@@ -2,7 +2,7 @@
 
 > Leer en español: [web-widget.md](../es/web-widget.md)
 
-The web widget is an embeddable chat, a channel of a client answered by one of its agents, that you can drop onto any website with a single `<script>` tag. Visitors get a floating chat button; opening it talks to the agent through OpenLivery's public API, with the same knowledge and instructions you configured.
+The web widget is an embeddable chat, a channel of a client answered by one of its agents, that you can drop onto any website with a single `<script>` tag. Visitors get a floating chat button; opening it talks to the agent through OpenNexus's public API, with the same knowledge and instructions you configured.
 
 ## How it works
 
@@ -20,7 +20,7 @@ The snippet points `data-agent` at the channel's public id and passes the appear
 
 ```html
 <script
-  src="https://your-openlivery-domain/widget.js"
+  src="https://your-opennexus-domain/widget.js"
   data-agent="CHANNEL_PUBLIC_ID"
   data-color="#075985"
   data-position="right"
@@ -28,7 +28,7 @@ The snippet points `data-agent` at the channel's public id and passes the appear
 ></script>
 ```
 
-Paste it before the closing `</body>` tag of any page. The `src` origin must be your OpenLivery deployment; `widget.js` derives the iframe URL from its own origin.
+Paste it before the closing `</body>` tag of any page. The `src` origin must be your OpenNexus deployment; `widget.js` derives the iframe URL from its own origin.
 
 ## Messages and rate limiting
 

@@ -4,8 +4,8 @@ services:
   db:
     image: postgres:17.6-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-openlivery}
-      POSTGRES_USER: ${POSTGRES_USER:-openlivery}
+      POSTGRES_DB: ${POSTGRES_DB:-opennexus}
+      POSTGRES_USER: ${POSTGRES_USER:-opennexus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -17,10 +17,10 @@ services:
     restart: unless-stopped
 
   api:
-    image: ${OPENLIVERY_IMAGE_PREFIX:-ghcr.io/sarrazola/openlivery}-api:${OPENLIVERY_VERSION:-latest}
+    image: ${OPENNEXUS_IMAGE_PREFIX:-ghcr.io/oscardavidmoralesflo-lgtm/opennexus}-api:${OPENNEXUS_VERSION:-latest}
     platform: linux/amd64
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-openlivery}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-openlivery}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-opennexus}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-opennexus}
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY}
       WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN:?Set WHATSAPP_BRIDGE_TOKEN}
@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: ${OPENLIVERY_IMAGE_PREFIX:-ghcr.io/sarrazola/openlivery}-web:${OPENLIVERY_VERSION:-latest}
+    image: ${OPENNEXUS_IMAGE_PREFIX:-ghcr.io/oscardavidmoralesflo-lgtm/opennexus}-web:${OPENNEXUS_VERSION:-latest}
     platform: linux/amd64
     environment:
       BACKEND_INTERNAL_URL: http://api:8000
@@ -60,14 +60,14 @@ services:
     restart: unless-stopped
 
   whatsapp:
-    image: ${OPENLIVERY_IMAGE_PREFIX:-ghcr.io/sarrazola/openlivery}-whatsapp:${OPENLIVERY_VERSION:-latest}
+    image: ${OPENNEXUS_IMAGE_PREFIX:-ghcr.io/oscardavidmoralesflo-lgtm/opennexus}-whatsapp:${OPENNEXUS_VERSION:-latest}
     platform: linux/amd64
     environment:
       BACKEND_URL: http://api:8000
       WHATSAPP_BRIDGE_HOST: 0.0.0.0
       WHATSAPP_BRIDGE_PORT: 3101
       WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN:?Set WHATSAPP_BRIDGE_TOKEN}
-      WHATSAPP_STORE_URL: postgres://${POSTGRES_USER:-openlivery}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-openlivery}?sslmode=disable&search_path=whatsmeow
+      WHATSAPP_STORE_URL: postgres://${POSTGRES_USER:-opennexus}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-opennexus}?sslmode=disable&search_path=whatsmeow
     depends_on:
       api:
         condition: service_healthy

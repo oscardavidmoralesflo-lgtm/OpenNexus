@@ -3,12 +3,12 @@
 > Read in English: [whatsapp-cloud-api.md](../en/whatsapp-cloud-api.md)
 
 Esta guía explica cómo conectar el número de WhatsApp de un cliente a
-OpenLivery usando la **API oficial de WhatsApp Business Cloud** (alojada por
-Meta): desde crear la app en Meta hasta pegar las credenciales en OpenLivery
+OpenNexus usando la **API oficial de WhatsApp Business Cloud** (alojada por
+Meta): desde crear la app en Meta hasta pegar las credenciales en OpenNexus
 y salir a producción. Es independiente del canal WhatsApp QR — un cliente
 puede tener ambos conectados en números distintos.
 
-Al final habrás ingresado cuatro valores en OpenLivery:
+Al final habrás ingresado cuatro valores en OpenNexus:
 
 | Valor | De dónde sale |
 | --- | --- |
@@ -29,10 +29,10 @@ Antes de la configuración técnica, asegúrate de tener:
 - Un número de teléfono que pueda recibir un SMS o una llamada de
   verificación y que **no** esté registrado actualmente en las apps de
   WhatsApp/WhatsApp Business.
-- Una instancia de OpenLivery accesible por **HTTPS público** (Meta solo
+- Una instancia de OpenNexus accesible por **HTTPS público** (Meta solo
   entrega webhooks a URLs HTTPS), con el cliente creado y un agente asignado.
 - **Una app de Meta por cliente.** Una app de Meta tiene una sola URL de
-  callback, y OpenLivery le da la suya a cada canal, así que una app no puede
+  callback, y OpenNexus le da la suya a cada canal, así que una app no puede
   servir a dos clientes: la URL que registres es la única que recibe. El tráfico
   que llega de un número que no es el del canal se ignora en vez de contestarlo
   con el agente equivocado, así que una app compartida se ve como mensajes que
@@ -57,8 +57,8 @@ Antes de la configuración técnica, asegúrate de tener:
      dar uno más específico y menos genérico.
 4. Completa la **verificación por SMS o llamada** del número.
 5. Copia el **Phone number ID** que aparece en esta pantalla — es el que
-   pegarás en OpenLivery. El **ID de la cuenta de WhatsApp Business**
-   (WABA ID) aparece en la misma pantalla y es opcional en OpenLivery.
+   pegarás en OpenNexus. El **ID de la cuenta de WhatsApp Business**
+   (WABA ID) aparece en la misma pantalla y es opcional en OpenNexus.
 
 ## 4. Generar el token de acceso permanente
 
@@ -75,20 +75,20 @@ conexión permanente, créalo con un usuario del sistema:
    - `whatsapp_business_management`
 5. **Copia el token de inmediato y guárdalo en un lugar seguro** — Meta no lo
    volverá a mostrar. Este es el **token de acceso permanente** para
-   OpenLivery.
+   OpenNexus.
 
 ## 5. Obtener el secreto de la app
 
 1. En el App Dashboard ve a **App settings > Basic**.
 2. Haz clic en **Show** junto a **App secret** y cópialo.
 
-OpenLivery usa el secreto de la app para validar la firma HMAC de cada
+OpenNexus usa el secreto de la app para validar la firma HMAC de cada
 webhook que envía Meta, de modo que las solicitudes que no vienen realmente
 de Meta se rechazan.
 
-## 6. Ingresar las credenciales en OpenLivery
+## 6. Ingresar las credenciales en OpenNexus
 
-1. En OpenLivery abre **Clientes**, elige el cliente y en su pestaña de
+1. En OpenNexus abre **Clientes**, elige el cliente y en su pestaña de
    **Canales** abre la tarjeta **WhatsApp API** (también accesible desde la
    página **Canales**).
 2. Selecciona el **agente** que responderá este número.
@@ -103,7 +103,7 @@ de Meta se rechazan.
 
 ## 7. Registrar el webhook
 
-En la misma página del canal, OpenLivery muestra una **URL de callback** y un
+En la misma página del canal, OpenNexus muestra una **URL de callback** y un
 **token de verificación** con botones de copiado:
 
 1. En el portal de desarrolladores de Meta ve a **WhatsApp > Configuration**.
@@ -119,19 +119,19 @@ En la misma página del canal, OpenLivery muestra una **URL de callback** y un
 
 ## 8. Conectar y salir a producción
 
-1. De vuelta en OpenLivery haz clic en **Conectar y verificar**. OpenLivery
+1. De vuelta en OpenNexus haz clic en **Conectar y verificar**. OpenNexus
    valida las credenciales contra la Graph API y captura el número y su
    nombre verificado; el estado del canal cambia a **conectado**.
 2. En el portal de desarrolladores cambia el **App Mode** de **Development**
    a **Live** (barra superior) para permitir el tráfico real de clientes.
 3. Envía un mensaje de WhatsApp al número: el agente asignado debería
-   responder, y la conversación aparece en el Inbox de OpenLivery.
+   responder, y la conversación aparece en el Inbox de OpenNexus.
 
 ## 9. Solución de problemas
 
 - **Error de autorización** — normalmente un token caducado o permisos
   faltantes (`whatsapp_business_messaging`). Genera un nuevo token permanente
-  (paso 4) y guárdalo de nuevo en OpenLivery.
+  (paso 4) y guárdalo de nuevo en OpenNexus.
 - **Nombre visible pendiente o rechazado** — asegúrate de que el nombre
   visible coincida con el nombre legal del negocio o con la marca del sitio
   web.
@@ -139,7 +139,7 @@ En la misma página del canal, OpenLivery muestra una **URL de callback** y un
   a la **cuenta de WhatsApp** en Business Suite, no solo a la cuenta
   publicitaria general.
 - **La verificación del webhook falla** — el token de verificación pegado en
-  Meta debe coincidir exactamente con el que muestra OpenLivery, y la URL de
+  Meta debe coincidir exactamente con el que muestra OpenNexus, y la URL de
   callback debe ser accesible desde internet por HTTPS. En instancias
   self-hosted, revisa que `FRONTEND_URL` apunte a la dirección pública de la
   app.
@@ -149,7 +149,7 @@ En la misma página del canal, OpenLivery muestra una **URL de callback** y un
   [Requisitos previos](#1-requisitos-previos)). Después confirma la suscripción
   al campo de webhook **`messages`** (paso 7) y que la app esté en modo **Live**; en modo
   Development Meta solo entrega tráfico de números de prueba. La tarjeta del
-  canal en OpenLivery muestra el último error del webhook, si lo hay.
+  canal en OpenNexus muestra el último error del webhook, si lo hay.
 - **Llegan mensajes pero el agente no responde** — el canal está conectado
   pero el agente asignado puede estar inactivo o sin la API key de su
   proveedor; la tarjeta del canal muestra la razón exacta en **último

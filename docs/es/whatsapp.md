@@ -2,7 +2,7 @@
 
 > Read in English: [whatsapp.md](../en/whatsapp.md)
 
-OpenLivery conecta un número real de WhatsApp a cada cliente para que su agente responda las conversaciones automáticamente. Cada cliente tiene su propia sesión, vinculada al escanear un código QR desde la app móvil de WhatsApp, sin necesidad de una cuenta de la WhatsApp Business API.
+OpenNexus conecta un número real de WhatsApp a cada cliente para que su agente responda las conversaciones automáticamente. Cada cliente tiene su propia sesión, vinculada al escanear un código QR desde la app móvil de WhatsApp, sin necesidad de una cuenta de la WhatsApp Business API.
 
 ## El servicio puente
 

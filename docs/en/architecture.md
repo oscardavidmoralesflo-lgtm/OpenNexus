@@ -2,7 +2,7 @@
 
 > Leer en español: [architecture.md](../es/architecture.md)
 
-One OpenLivery installation serves one agency with multiple client workspaces: three application services plus PostgreSQL, served through a single-origin gateway. First-run setup creates the agency and its owner, then public registration closes. This page explains the services, data model, and ownership checks.
+One OpenNexus installation serves one agency with multiple client workspaces: three application services plus PostgreSQL, served through a single-origin gateway. First-run setup creates the agency and its owner, then public registration closes. This page explains the services, data model, and ownership checks.
 
 ## The services
 

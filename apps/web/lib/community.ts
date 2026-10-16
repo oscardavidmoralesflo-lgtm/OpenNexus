@@ -1,5 +1,5 @@
 export const DISCORD_INVITE_URL = "https://discord.gg/DAVJgXEdTg";
-export const GITHUB_REPO = "sarrazola/openlivery";
+export const GITHUB_REPO = "oscardavidmoralesflo-lgtm/OpenNexus";
 export const GITHUB_REPO_URL = `https://github.com/${GITHUB_REPO}`;
 
 export type CommunityLink = "discord" | "github";

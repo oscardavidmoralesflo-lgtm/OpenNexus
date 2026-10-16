@@ -1655,34 +1655,20 @@ button.back-link { padding: 0; border: 0; background: transparent; cursor: point
   .wa-actions .button, .wa-actions-side { width: 100%; }
 }
 
-/* Identidad OpenLivery: azul institucional, verde como acento y superficies neutras. */
-.openlivery-icon {
+/* OpenNexus mark: a self-contained SVG tile, shown whole at the icon size. */
+.opennexus-icon {
   width: 32px !important;
   height: 32px !important;
   min-width: 32px;
   display: inline-block !important;
-  position: relative;
-  overflow: hidden;
   flex: 0 0 auto;
   border: 0 !important;
-  border-radius: 7px !important;
-  background: var(--canvas) !important;
+  border-radius: 8px !important;
+  background: transparent !important;
   box-shadow: none !important;
 }
-.openlivery-icon img {
-  width: 112px !important;
-  max-width: none !important;
-  height: 112px !important;
-  position: absolute;
-  top: -38px;
-  left: -15px;
-  object-fit: contain;
-}
-.openlivery-icon::after { content: ""; width: 6px; position: absolute; inset: 0 0 0 auto; z-index: 2; background: var(--canvas); }
-.brand .openlivery-icon { width: 30px !important; height: 30px !important; min-width: 30px; }
-.brand .openlivery-icon img { width: 106px !important; height: 106px !important; top: -36px; left: -14px; }
-.preview-logo.openlivery-icon { width: 30px !important; height: 30px !important; min-width: 30px; }
-.preview-logo.openlivery-icon img { width: 106px !important; height: 106px !important; top: -36px; left: -14px; }
+.opennexus-icon img { width: 100% !important; height: 100% !important; display: block; }
+.brand .opennexus-icon, .preview-logo.opennexus-icon { width: 30px !important; height: 30px !important; min-width: 30px; }
 
 .brand-row { padding-bottom: 14px; }
 .brand { color: var(--accent-text); font-size: 16px; font-weight: 700; }
@@ -1735,7 +1721,6 @@ input:focus, textarea:focus, select:focus, .phone-input:focus-within { border-co
 .settings-intro, .security-note { color: var(--accent-text); border-color: var(--line); background: var(--canvas); }
 .wa-side > svg { color: var(--green-text); }
 
-.access-brand > .openlivery-icon { background: var(--canvas) !important; }
 .access-brand strong { color: var(--accent-text); font-size: 16px; }
 .preview-logo, .preview-icon { color: var(--accent-text); background: var(--accent-soft); }
 .access-card-label { color: var(--green-text); }

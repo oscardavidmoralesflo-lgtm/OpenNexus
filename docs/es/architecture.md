@@ -2,7 +2,7 @@
 
 > Read in English: [architecture.md](../en/architecture.md)
 
-Cada instalación de OpenLivery sirve a una agencia con múltiples espacios de clientes: tres servicios de aplicación más PostgreSQL, servidos a través de una puerta de enlace de origen único. La configuración inicial crea la agencia y su propietario; después se cierra el registro público. Esta página explica los servicios, el modelo de datos y los controles de acceso.
+Cada instalación de OpenNexus sirve a una agencia con múltiples espacios de clientes: tres servicios de aplicación más PostgreSQL, servidos a través de una puerta de enlace de origen único. La configuración inicial crea la agencia y su propietario; después se cierra el registro público. Esta página explica los servicios, el modelo de datos y los controles de acceso.
 
 ## Los servicios
 

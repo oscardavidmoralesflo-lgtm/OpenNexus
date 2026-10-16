@@ -2,7 +2,7 @@
 
 > Leer en español: [getting-started.md](../es/getting-started.md)
 
-OpenLivery runs as three services plus PostgreSQL, orchestrated by Docker Compose. The fastest way to try it is to clone the repository, generate secrets and bring the stack up with a single command.
+OpenNexus runs as three services plus PostgreSQL, orchestrated by Docker Compose. The fastest way to try it is to clone the repository, generate secrets and bring the stack up with a single command.
 
 ## Requirements
 
@@ -30,8 +30,8 @@ openssl version
 ## Install and run
 
 ```bash
-git clone https://github.com/sarrazola/openlivery.git
-cd openlivery
+git clone https://github.com/oscardavidmoralesflo-lgtm/OpenNexus.git
+cd opennexus
 ./scripts/generate-docker-env.sh   # writes .env.docker with random secrets (gitignored)
 make up                            # build images, start services, run migrations
 ```

@@ -24,12 +24,12 @@ jobs:
       db:
         image: postgres:17.6-alpine
         env:
-          POSTGRES_DB: openlivery_test
-          POSTGRES_USER: openlivery
-          POSTGRES_PASSWORD: openlivery
+          POSTGRES_DB: opennexus_test
+          POSTGRES_USER: opennexus
+          POSTGRES_PASSWORD: opennexus
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U openlivery -d openlivery_test"
+          --health-cmd "pg_isready -U opennexus -d opennexus_test"
           --health-interval 5s --health-timeout 5s --health-retries 20
     defaults:
       run:
@@ -66,17 +66,17 @@ jobs:
       # walked back and forward, which is what reverting a release does.
       - name: Migrations apply, revert and apply again
         env:
-          DATABASE_URL: postgresql+psycopg://openlivery:openlivery@127.0.0.1:5432/openlivery_migrations
-          PGPASSWORD: openlivery
+          DATABASE_URL: postgresql+psycopg://opennexus:opennexus@127.0.0.1:5432/opennexus_migrations
+          PGPASSWORD: opennexus
         run: |
-          psql -h 127.0.0.1 -U openlivery -d openlivery_test -c "CREATE DATABASE openlivery_migrations"
+          psql -h 127.0.0.1 -U opennexus -d opennexus_test -c "CREATE DATABASE opennexus_migrations"
           alembic upgrade head
           alembic downgrade -10
           alembic upgrade head
 
       - name: Run the suite
         env:
-          TEST_DATABASE_URL: postgresql+psycopg://openlivery:openlivery@127.0.0.1:5432/openlivery_test
+          TEST_DATABASE_URL: postgresql+psycopg://opennexus:opennexus@127.0.0.1:5432/opennexus_test
         run: pytest -q
 
   web:

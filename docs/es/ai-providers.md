@@ -2,17 +2,17 @@
 
 > Read in English: [ai-providers.md](../en/ai-providers.md)
 
-OpenLivery no incluye un proveedor de IA propio. Cada agencia trae su propia clave: pegas una API key de **OpenRouter**, OpenLivery la guarda cifrada y todos los agentes de esa agencia la usan para hablar con cualquier modelo que OpenRouter ofrezca. Así mantienes el control de la facturación, las cuotas y los datos, y cada agente tiene la misma puerta a OpenAI, Anthropic, Google, DeepSeek, xAI y el resto.
+OpenNexus no incluye un proveedor de IA propio. Cada agencia trae su propia clave: pegas una API key de **OpenRouter**, OpenNexus la guarda cifrada y todos los agentes de esa agencia la usan para hablar con cualquier modelo que OpenRouter ofrezca. Así mantienes el control de la facturación, las cuotas y los datos, y cada agente tiene la misma puerta a OpenAI, Anthropic, Google, DeepSeek, xAI y el resto.
 
 ## Trae tu propia clave
 
-Las claves se configuran por agencia. Abre **Ajustes**, busca la tarjeta de OpenRouter y pega tu clave (créala en [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)). Al guardarla, OpenLivery primero la valida contra OpenRouter (consulta `{base_url}/key`, que describe la clave y su crédito restante); si la verificación falla, no se guarda nada. Solo tras una validación exitosa se persiste la clave.
+Las claves se configuran por agencia. Abre **Ajustes**, busca la tarjeta de OpenRouter y pega tu clave (créala en [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys)). Al guardarla, OpenNexus primero la valida contra OpenRouter (consulta `{base_url}/key`, que describe la clave y su crédito restante); si la verificación falla, no se guarda nada. Solo tras una validación exitosa se persiste la clave.
 
 Las claves guardadas nunca se devuelven completas al navegador: la interfaz solo muestra un valor enmascarado. En disco, la clave se cifra con una clave derivada de `ENCRYPTION_KEY` y se descifra bajo demanda cuando un agente la necesita, así que rotar o perder ese secreto hace ilegible la clave guardada. Consulta [Configuración](configuration.md) para saber cómo se define `ENCRYPTION_KEY` y por qué nunca debe cambiar.
 
 ## Cómo se hacen las peticiones
 
-OpenLivery llama a la API compatible con OpenAI de OpenRouter en `https://openrouter.ai/api/v1`:
+OpenNexus llama a la API compatible con OpenAI de OpenRouter en `https://openrouter.ai/api/v1`:
 
 | Capacidad | Endpoint |
 | --- | --- |
@@ -21,7 +21,7 @@ OpenLivery llama a la API compatible con OpenAI de OpenRouter en `https://openro
 | Transcripción de notas de voz | `/audio/transcriptions` |
 | Embeddings de la base de conocimiento | `/embeddings` (`openai/text-embedding-3-small`) |
 
-Cada respuesta de chat vuelve con el bloque de uso de OpenRouter, incluido lo que costó la llamada. OpenLivery guarda esa cifra con el registro de uso de la respuesta (`usage_records.cost_usd`), así que los reportes de costo leen números reales en vez de estimar con una tabla de precios.
+Cada respuesta de chat vuelve con el bloque de uso de OpenRouter, incluido lo que costó la llamada. OpenNexus guarda esa cifra con el registro de uso de la respuesta (`usage_records.cost_usd`), así que los reportes de costo leen números reales en vez de estimar con una tabla de precios.
 
 ## Identificadores de modelo
 

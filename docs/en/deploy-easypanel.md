@@ -1,4 +1,4 @@
-# Deploy OpenLivery with Easypanel
+# Deploy OpenNexus with Easypanel
 
 Use Easypanel's **Compose service** with
 [`docker-compose.easypanel.yml`](../../docker-compose.easypanel.yml). It starts
@@ -14,8 +14,8 @@ architectures can use the [standard source build](self-hosting.md#install).
 Clone the public repository on a trusted computer and generate fresh secrets:
 
 ```bash
-git clone https://github.com/sarrazola/openlivery.git
-cd openlivery
+git clone https://github.com/oscardavidmoralesflo-lgtm/OpenNexus.git
+cd opennexus
 ./scripts/generate-docker-env.sh
 ```
 
@@ -30,17 +30,17 @@ cookie values.
 
 | Environment value | Purpose |
 | --- | --- |
-| `POSTGRES_DB` | Database name; defaults to `openlivery`. |
-| `POSTGRES_USER` | Database user; defaults to `openlivery`. |
+| `POSTGRES_DB` | Database name; defaults to `opennexus`. |
+| `POSTGRES_USER` | Database user; defaults to `opennexus`. |
 | `POSTGRES_PASSWORD` | Use the generated hexadecimal password so the database URL remains valid. |
 | `SECRET_KEY` | Session-signing secret generated for this installation. |
 | `ENCRYPTION_KEY` | Original encryption key; retain it across redeploys and restores. |
 | `WHATSAPP_BRIDGE_TOKEN` | Shared secret used by the API and bridge. |
 | `FRONTEND_URL` | Public HTTPS origin. |
-| `OPENLIVERY_VERSION` | One published tag for all three application images; defaults to `latest`. Prefer a release tag or `sha-<short-commit>` for repeatable upgrades. |
+| `OPENNEXUS_VERSION` | One published tag for all three application images; defaults to `latest`. Prefer a release tag or `sha-<short-commit>` for repeatable upgrades. |
 | `ACCESS_TOKEN_MINUTES` | Optional session lifetime; defaults to `10080`. |
 
-The template supplies internal database and bridge URLs. OpenLivery uses backend
+The template supplies internal database and bridge URLs. OpenNexus uses backend
 JWT sessions; it does not require NextAuth variables or a Redis service. The
 prebuilt frontend calls relative `/api`, so `NEXT_PUBLIC_API_URL` is not needed.
 Host-port variables from `.env.docker` are unused by this template.
@@ -51,7 +51,7 @@ Following the [official Compose service workflow](https://easypanel.io/docs/serv
 
 1. In an Easypanel project, create a **Compose** service and select **Git** as
    its source.
-2. Set repository URL to `https://github.com/sarrazola/openlivery.git`, branch
+2. Set repository URL to `https://github.com/oscardavidmoralesflo-lgtm/OpenNexus.git`, branch
    to `main`, build path to `/`, and Compose file to
    `docker-compose.easypanel.yml`. The Git checkout also supplies
    `docker/Caddyfile`; the template is not a standalone inline YAML paste.
@@ -128,7 +128,7 @@ name and volume definitions stable when redeploying.
 
 ## Upgrade and troubleshoot
 
-Back up first, then select the new published image tag in `OPENLIVERY_VERSION`
+Back up first, then select the new published image tag in `OPENNEXUS_VERSION`
 and redeploy. Keep all three application images on the same version. The API
 runs migrations automatically; changing the environment without redeploying
 does not update running containers. Verify sign-in and file access afterwards.

@@ -22,7 +22,7 @@ from .agents import _agent
 
 
 router = APIRouter(prefix="/agents/{agent_id}/tools", tags=["Agent tools"])
-logger = logging.getLogger("openlivery.agent_tools")
+logger = logging.getLogger("opennexus.agent_tools")
 
 
 def _tool(db: Session, user: User, agent_id: uuid.UUID, tool_id: uuid.UUID) -> AgentTool:

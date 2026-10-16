@@ -29,7 +29,7 @@ from ..services.whatsapp_identity import contact_names, peer_id, resolve_peer_co
 
 public_router = APIRouter(prefix="/public/whatsapp-cloud", tags=["WhatsApp Cloud public"])
 
-logger = logging.getLogger("openlivery.whatsapp_cloud")
+logger = logging.getLogger("opennexus.whatsapp_cloud")
 
 
 def _channel(db: Session, channel_id: uuid.UUID) -> WhatsAppCloudChannel:

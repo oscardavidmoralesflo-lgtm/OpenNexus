@@ -2,7 +2,7 @@
 
 > Leer en español: [knowledge-base.md](../es/knowledge-base.md)
 
-The knowledge base is how you give an agent the business facts it needs to answer accurately. You add knowledge from two kinds of sources, and OpenLivery assembles the relevant parts into the agent's system prompt on every message.
+The knowledge base is how you give an agent the business facts it needs to answer accurately. You add knowledge from two kinds of sources, and OpenNexus assembles the relevant parts into the agent's system prompt on every message.
 
 ## Sources of knowledge
 
@@ -17,10 +17,10 @@ When you upload a PDF, its text is extracted immediately with `pypdf` and stored
 
 ## How retrieval works
 
-On each incoming message, OpenLivery decides how much document text to include:
+On each incoming message, OpenNexus decides how much document text to include:
 
 - **Small knowledge bases are sent in full.** When the combined extracted text of all processed documents is at or below **45,000 characters**, every document is included verbatim — no search step.
-- **Larger knowledge bases are retrieved.** Above that threshold, OpenLivery runs semantic search: it embeds the user's query with the agent's model and ranks the chunks indexed with that same model by cosine similarity, keeping the ten best and dropping any that scores well below the top match, within a search budget. If embeddings are unavailable, it falls back to keyword ranking over the chunks.
+- **Larger knowledge bases are retrieved.** Above that threshold, OpenNexus runs semantic search: it embeds the user's query with the agent's model and ranks the chunks indexed with that same model by cosine similarity, keeping the ten best and dropping any that scores well below the top match, within a search budget. If embeddings are unavailable, it falls back to keyword ranking over the chunks.
 
 Embeddings are stored as a plain **JSON array of floats** and similarity is computed in Python, so **no database extension is required** — the knowledge base is portable across any PostgreSQL. See [AI providers](ai-providers.md) for configuring the connection used for embeddings.
 

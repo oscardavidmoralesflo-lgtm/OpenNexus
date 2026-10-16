@@ -1,6 +1,6 @@
 # Instagram and Facebook Messenger
 
-OpenLivery can receive direct messages for Instagram professional accounts and
+OpenNexus can receive direct messages for Instagram professional accounts and
 Facebook Pages, answer through an agent or a human operator, and show these
 conversations alongside other channels in the client inbox. A personal Facebook
 profile inbox and Instagram group messages are not supported.
@@ -68,7 +68,7 @@ mix their tokens, API hosts, permissions, or account IDs. This implementation
 uses direct Instagram Login and a separate Messenger connector.
 
 Instagram confirms account webhook activation with `{"success": true}` from
-the authenticated `POST /ACCOUNT_ID/subscribed_apps`. OpenLivery requires that
+the authenticated `POST /ACCOUNT_ID/subscribed_apps`. OpenNexus requires that
 explicit boolean acknowledgement after verifying account identity and messaging
 access. It does not compare subscription object IDs with the OAuth client ID.
 The preliminary subscription list is used only to decide whether rollback can
@@ -118,13 +118,13 @@ OAuth. Enter the application ID, receiving account ID, access token, matching
 application secret, and assigned agent. For Instagram, provide a valid
 long-lived Instagram User token; for Messenger, provide a Page token.
 
-1. Save the credentials. OpenLivery validates account identity and messaging
+1. Save the credentials. OpenNexus validates account identity and messaging
    access, stores a disabled draft, and displays its webhook URL and verification
    token. This first save does not activate message processing.
 2. Configure Meta to call the displayed per-channel URL
    `/api/public/social/channels/CHANNEL_ID/webhook`, using the displayed token.
 3. Enable the provider's webhook fields listed above.
-4. Press **Connect**. OpenLivery subscribes the account and activates the
+4. Press **Connect**. OpenNexus subscribes the account and activates the
    connection only after confirmation. Instagram requires the explicit success
    acknowledgement; Messenger reads back the matching application and fields.
 
@@ -133,7 +133,7 @@ A connected channel cannot be repointed to a different external account: old
 conversations must continue to reference the account that received them.
 Disconnect removes local credentials and attempts to remove the app's remote
 subscription. If Meta is unreachable or authorization was already revoked,
-OpenLivery disconnects locally and reports that remote removal could not be
+OpenNexus disconnects locally and reports that remote removal could not be
 confirmed. Check the account's application settings in that case.
 
 ## Inbox behavior and limits
@@ -186,7 +186,7 @@ then the conversation enters human mode. A failed farewell still hands over.
 
 Human replies from native apps arrive as provider echo events. Verify these
 with the actual app's conversation routing settings before combining multiple
-inbox applications. Platform-level conversation ownership and OpenLivery's
+inbox applications. Platform-level conversation ownership and OpenNexus's
 AI/human switch are separate mechanisms.
 
 ## Operations and security

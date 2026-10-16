@@ -2,7 +2,7 @@
 
 > Read in English: [getting-started.md](../en/getting-started.md)
 
-OpenLivery se ejecuta como tres servicios más PostgreSQL, orquestados por Docker Compose. La forma más rápida de probarlo es clonar el repositorio, generar los secretos y levantar el stack con un solo comando.
+OpenNexus se ejecuta como tres servicios más PostgreSQL, orquestados por Docker Compose. La forma más rápida de probarlo es clonar el repositorio, generar los secretos y levantar el stack con un solo comando.
 
 ## Requisitos
 
@@ -11,8 +11,8 @@ Necesitas [Docker](https://docs.docker.com/get-docker/) — Docker Desktop, o Do
 ## Instalar y ejecutar
 
 ```bash
-git clone https://github.com/sarrazola/openlivery.git
-cd openlivery
+git clone https://github.com/oscardavidmoralesflo-lgtm/OpenNexus.git
+cd opennexus
 ./scripts/generate-docker-env.sh   # crea .env.docker con secretos aleatorios (gitignored)
 make up                            # construye imágenes, inicia servicios y migra
 ```

@@ -14,7 +14,7 @@ Una herramienta HTTP describe un endpoint que el agente puede llamar:
 - **Parámetros de body y query** — cada parámetro tiene nombre, tipo (`string`, `number`, `integer`, `boolean`), descripción y si es obligatorio. Los parámetros de body solo se permiten en POST, PUT y PATCH.
 - **Opciones avanzadas** — headers de autenticación (por ejemplo `Authorization: Bearer …`) y un timeout entre 1 y 120 segundos (30 por defecto). Los valores de los headers se **guardan cifrados** y la API no los devuelve ni la UI los vuelve a mostrar; solo puedes reemplazarlos.
 
-Cuando el modelo llama la herramienta, OpenLivery sustituye los placeholders de la ruta, envía los parámetros de query y el body JSON declarados, y devuelve la respuesta al modelo como `HTTP <status>: <body>`. Las respuestas se limitan a 100 KB.
+Cuando el modelo llama la herramienta, OpenNexus sustituye los placeholders de la ruta, envía los parámetros de query y el body JSON declarados, y devuelve la respuesta al modelo como `HTTP <status>: <body>`. Las respuestas se limitan a 100 KB.
 
 ## Servidores MCP
 
@@ -30,7 +30,7 @@ Con la lista a la vista eliges qué herramientas puede llamar el agente. Todas v
 
 ## Cómo funciona el tool calling
 
-Cuando un agente con herramientas activas recibe un mensaje, OpenLivery envía las definiciones de las herramientas al modelo junto con la conversación. Si el modelo decide llamar una herramienta, OpenLivery la ejecuta (la petición HTTP, o una llamada proxied al servidor MCP), le devuelve el resultado y deja que el modelo continúe — hasta **5 rondas** por respuesta, tras las cuales el modelo debe responder con texto. Las herramientas viajan como definiciones de función de chat completions, que es lo que OpenRouter habla para todos los proveedores, así que cualquier modelo con soporte de herramientas funciona. El uso de tokens y el costo de todas las rondas se suman en el registro de uso de la respuesta.
+Cuando un agente con herramientas activas recibe un mensaje, OpenNexus envía las definiciones de las herramientas al modelo junto con la conversación. Si el modelo decide llamar una herramienta, OpenNexus la ejecuta (la petición HTTP, o una llamada proxied al servidor MCP), le devuelve el resultado y deja que el modelo continúe — hasta **5 rondas** por respuesta, tras las cuales el modelo debe responder con texto. Las herramientas viajan como definiciones de función de chat completions, que es lo que OpenRouter habla para todos los proveedores, así que cualquier modelo con soporte de herramientas funciona. El uso de tokens y el costo de todas las rondas se suman en el registro de uso de la respuesta.
 
 Cada respuesta del asistente guarda qué herramientas se ejecutaron, con sus argumentos y una vista previa de cada resultado. En el playground verás un chip bajo la respuesta con las herramientas usadas; las llamadas fallidas se resaltan y muestran el detalle del error, para diagnosticar una herramienta rota sin leer logs.
 

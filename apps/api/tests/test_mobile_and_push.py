@@ -5,7 +5,7 @@ Two things these tests exist to hold still:
 * An install that upgrades keeps working. A portal that only ever had the single
   legacy e-mail and password must still sign in, in the browser and on a phone.
 * Notifications stay optional. With no provider configured nothing is sent and
-  nothing is required, which is the default a self-hosted OpenLivery runs on.
+  nothing is required, which is the default a self-hosted OpenNexus runs on.
 """
 
 import pytest
@@ -270,7 +270,7 @@ def test_webhook_provider_fires_when_a_human_is_expected_to_answer(
 
     settings = get_settings()
     monkeypatch.setattr(settings, "push_provider", "webhook", raising=False)
-    monkeypatch.setattr(settings, "push_webhook_url", "https://hooks.example.com/openlivery", raising=False)
+    monkeypatch.setattr(settings, "push_webhook_url", "https://hooks.example.com/opennexus", raising=False)
     monkeypatch.setattr(settings, "push_webhook_secret", "shhh", raising=False)
 
     posted = {}
@@ -306,7 +306,7 @@ def test_webhook_provider_fires_when_a_human_is_expected_to_answer(
     client.patch(f"/api/conversations/{conversation_id}/mode", json={"mode": "human"})
     client.post(f"/api/widget/{public_id}/messages", json={"session_id": "s1", "content": "are you open Saturday?"})
 
-    assert posted["url"] == "https://hooks.example.com/openlivery"
+    assert posted["url"] == "https://hooks.example.com/opennexus"
     assert posted["headers"]["Authorization"] == "Bearer shhh"
     # A web visitor is anonymous, so the heading names the channel rather than
     # echoing their first message back as if it had just arrived.

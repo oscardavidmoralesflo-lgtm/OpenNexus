@@ -1,11 +1,11 @@
-# Autoalojar OpenLivery
+# Autoalojar OpenNexus
 
 > Read in English: [self-hosting.md](../en/self-hosting.md)
 
-Levanta y opera tu propia instancia de OpenLivery. Para una vista general de las
+Levanta y opera tu propia instancia de OpenNexus. Para una vista general de las
 funcionalidades, mira el [README](../../README.md).
 
-OpenLivery se orquesta con Docker Compose, y un `Makefile` envuelve los comandos
+OpenNexus se orquesta con Docker Compose, y un `Makefile` envuelve los comandos
 habituales. Un **gateway** ligero (Caddy) es el único punto de entrada público:
 sirve la aplicación y enruta `/api/*` al backend, así que el frontend y la API
 comparten un mismo origen.
@@ -70,7 +70,7 @@ puertos **80** y **443** abiertos (mira [Pasar a producción](#pasar-a-producci�
 
 ```bash
 git clone <REPOSITORY_URL>
-cd openlivery
+cd opennexus
 ./scripts/generate-docker-env.sh   # writes .env.docker with random secrets (gitignored)
 make up                            # build, start, run migrations
 ```
@@ -98,9 +98,9 @@ Registry, así que un servidor puede saltarse el build y descargarlas:
 make pull        # docker compose pull + up -d
 ```
 
-Esto descarga `ghcr.io/sarrazola/openlivery-{api,web,whatsapp}:latest`. Fija una
-versión con `OPENLIVERY_VERSION=v1.2.3 make pull`, o apunta a tu propio registro
-con `OPENLIVERY_IMAGE_PREFIX`. La imagen `web` precompilada llama a la API a
+Esto descarga `ghcr.io/oscardavidmoralesflo-lgtm/opennexus-{api,web,whatsapp}:latest`. Fija una
+versión con `OPENNEXUS_VERSION=v1.2.3 make pull`, o apunta a tu propio registro
+con `OPENNEXUS_IMAGE_PREFIX`. La imagen `web` precompilada llama a la API a
 través del gateway con un `/api` relativo; para apuntar a una API en otro origen
 tienes que construir el frontend tú mismo con `NEXT_PUBLIC_API_URL` definida.
 
@@ -116,7 +116,7 @@ base de datos y el puente de WhatsApp se quedan en la red privada de Compose.
 
 ## Asegurar tu instalación
 
-Haz esto antes de exponer OpenLivery a alguien más.
+Haz esto antes de exponer OpenNexus a alguien más.
 
 - **Secretos.** `generate-docker-env.sh` rellena `SECRET_KEY`, `ENCRYPTION_KEY`,
   `WHATSAPP_BRIDGE_TOKEN` y `POSTGRES_PASSWORD` con valores aleatorios. Si los
@@ -211,7 +211,7 @@ registros DNS que te muestra:
 | Tipo | Host | Valor |
 | --- | --- | --- |
 | `CNAME` | `chat.marca.com` | el host de tu gateway (por ejemplo `app.youragency.com`) |
-| `TXT` | `_openlivery-challenge.chat.marca.com` | el token que se muestra |
+| `TXT` | `_opennexus-challenge.chat.marca.com` | el token que se muestra |
 
 Pulsa **Verificar**. Cuando encuentre el registro TXT, el dominio queda marcado
 como verificado, el gateway empieza a emitir su certificado y el frontend enruta
@@ -280,7 +280,7 @@ Exporta PostgreSQL sin parar la aplicación:
 ```bash
 mkdir -p backups
 docker compose --env-file .env.docker exec -T db \
-  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/openlivery.dump
+  sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/opennexus.dump
 ```
 
 Guarda también `.env.docker` en un gestor de secretos: una copia con claves de
@@ -292,7 +292,7 @@ Restaurar (reemplaza los datos de la base de destino, haz copia antes):
 ```bash
 docker compose --env-file .env.docker stop api whatsapp
 docker compose --env-file .env.docker exec -T db \
-  sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < backups/openlivery.dump
+  sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < backups/opennexus.dump
 docker compose --env-file .env.docker start api whatsapp
 ```
 
@@ -327,9 +327,9 @@ Requisitos: Python 3.12+, Node.js 20+, Go 1.27+ y PostgreSQL 14+ en marcha.
 
 ```bash
 # 1) databases
-psql -d postgres -c "CREATE ROLE openlivery LOGIN PASSWORD 'openlivery';"
-createdb -O openlivery openlivery
-createdb -O openlivery openlivery_test
+psql -d postgres -c "CREATE ROLE opennexus LOGIN PASSWORD 'opennexus';"
+createdb -O opennexus opennexus
+createdb -O opennexus opennexus_test
 
 # 2) env
 cp .env.example .env          # then set SECRET_KEY and ENCRYPTION_KEY
@@ -378,7 +378,7 @@ make test   # backend pytest + rebuild the web/whatsapp validation stages
 En local:
 
 ```bash
-cd apps/api && ../../.venv/bin/pytest -q     # backend (needs the openlivery_test DB)
+cd apps/api && ../../.venv/bin/pytest -q     # backend (needs the opennexus_test DB)
 cd apps/whatsapp && go test ./... && go vet ./...
 cd apps/web && npm run lint && npm run build
 ```

@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 os.environ["DATABASE_URL"] = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql+psycopg://openlivery:openlivery@localhost:5432/openlivery_test",
+    "postgresql+psycopg://opennexus:opennexus@localhost:5432/opennexus_test",
 )
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 os.environ.setdefault("SOCIAL_WORKER_ENABLED", "false")

@@ -1,11 +1,11 @@
-# Self-hosting OpenLivery
+# Self-hosting OpenNexus
 
 > Leer en español: [self-hosting.md](../es/self-hosting.md)
 
-Run and operate your own OpenLivery instance. For a feature overview see the
+Run and operate your own OpenNexus instance. For a feature overview see the
 [README](../../README.md).
 
-OpenLivery is orchestrated by Docker Compose, with a `Makefile` wrapping the
+OpenNexus is orchestrated by Docker Compose, with a `Makefile` wrapping the
 common commands. A lightweight **gateway** (Caddy) is the single public entry
 point: it serves the app and routes `/api/*` to the backend, so the frontend and
 API share one origin.
@@ -79,8 +79,8 @@ For a public deployment you also need a **domain** and a server with ports
 ## Install
 
 ```bash
-git clone https://github.com/sarrazola/openlivery.git
-cd openlivery
+git clone https://github.com/oscardavidmoralesflo-lgtm/OpenNexus.git
+cd opennexus
 ./scripts/generate-docker-env.sh   # writes .env.docker with random secrets (gitignored)
 make up                            # build, start, run migrations
 ```
@@ -107,9 +107,9 @@ Tagged images are published to the GitHub Container Registry on every push to
 make pull        # docker compose pull + up -d
 ```
 
-This pulls `ghcr.io/sarrazola/openlivery-{api,web,whatsapp}:latest`. Pin a release
-with `OPENLIVERY_VERSION=v1.2.3 make pull`, or point at your own registry with
-`OPENLIVERY_IMAGE_PREFIX`. The prebuilt `web` image calls the API through the
+This pulls `ghcr.io/oscardavidmoralesflo-lgtm/opennexus-{api,web,whatsapp}:latest`. Pin a release
+with `OPENNEXUS_VERSION=v1.2.3 make pull`, or point at your own registry with
+`OPENNEXUS_IMAGE_PREFIX`. The prebuilt `web` image calls the API through the
 gateway with relative `/api`; to target an API on a separate origin you must
 build the frontend yourself with `NEXT_PUBLIC_API_URL` set.
 
@@ -125,7 +125,7 @@ bridge stay on the private Compose network.
 
 ## Secure your install
 
-Do this before exposing OpenLivery to anyone else.
+Do this before exposing OpenNexus to anyone else.
 
 - **Secrets.** `generate-docker-env.sh` fills `SECRET_KEY`, `ENCRYPTION_KEY`,
   `WHATSAPP_BRIDGE_TOKEN` and `POSTGRES_PASSWORD` with random values. If you set
@@ -215,7 +215,7 @@ shows:
 | Type | Host | Value |
 | --- | --- | --- |
 | `CNAME` | `chat.brand.com` | your gateway host (e.g. `app.youragency.com`) |
-| `TXT` | `_openlivery-challenge.chat.brand.com` | the token shown |
+| `TXT` | `_opennexus-challenge.chat.brand.com` | the token shown |
 
 Click **Verify**. Once the TXT record is found the domain is marked verified, the
 gateway starts issuing its certificate, and the frontend routes the domain to
@@ -316,10 +316,10 @@ mkdir -p backups
 mkdir "$backup_dir"
 dc stop api whatsapp
 dc exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
-  > "$backup_dir/openlivery.dump.partial"
+  > "$backup_dir/opennexus.dump.partial"
 dc run --rm --no-deps -T --entrypoint tar api \
   -czf - -C /app/backend/storage . > "$backup_dir/uploads.tar.gz.partial"
-mv "$backup_dir/openlivery.dump.partial" "$backup_dir/openlivery.dump"
+mv "$backup_dir/opennexus.dump.partial" "$backup_dir/opennexus.dump"
 mv "$backup_dir/uploads.tar.gz.partial" "$backup_dir/uploads.tar.gz"
 dc start api whatsapp
 ```
@@ -345,7 +345,7 @@ before the maintenance window, then prepare its database and storage mount:
 ```bash
 set -eu
 backup_dir="backups/REPLACE_WITH_BACKUP_DIRECTORY"
-test -s "$backup_dir/openlivery.dump"
+test -s "$backup_dir/opennexus.dump"
 test -s "$backup_dir/uploads.tar.gz"
 dc stop api whatsapp
 dc up -d --wait db
@@ -367,7 +367,7 @@ dc run --rm --no-deps -T --entrypoint sh api -c \
   'contents=$(find /app/backend/storage -mindepth 1 -print -quit) || exit 1; test -z "$contents" || { echo "Upload target is not empty; restore to an empty destination." >&2; exit 1; }'
 dc exec -T db sh -c \
   'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --exit-on-error --single-transaction' \
-  < "$backup_dir/openlivery.dump"
+  < "$backup_dir/opennexus.dump"
 dc run --rm --no-deps -T --entrypoint tar api \
   -xzf - -C /app/backend/storage < "$backup_dir/uploads.tar.gz"
 dc up -d --wait --no-build
@@ -408,9 +408,9 @@ Requirements: Python 3.12+, Node.js 20+, Go 1.27+, PostgreSQL 14+ running.
 
 ```bash
 # 1) databases
-psql -d postgres -c "CREATE ROLE openlivery LOGIN PASSWORD 'openlivery';"
-createdb -O openlivery openlivery
-createdb -O openlivery openlivery_test
+psql -d postgres -c "CREATE ROLE opennexus LOGIN PASSWORD 'opennexus';"
+createdb -O opennexus opennexus
+createdb -O opennexus opennexus_test
 
 # 2) env
 cp .env.example .env          # then set SECRET_KEY and ENCRYPTION_KEY
@@ -457,7 +457,7 @@ make test   # backend pytest + rebuild the web/whatsapp validation stages
 Locally:
 
 ```bash
-cd apps/api && ../../.venv/bin/pytest -q     # backend (needs the openlivery_test DB)
+cd apps/api && ../../.venv/bin/pytest -q     # backend (needs the opennexus_test DB)
 cd apps/whatsapp && go test ./... && go vet ./...
 cd apps/web && npm run lint && npm run build
 ```

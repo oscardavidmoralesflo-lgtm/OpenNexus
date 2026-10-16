@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 export type ThemePreference = "system" | "light" | "dark";
 export type ResolvedTheme = "light" | "dark";
 
-export const THEME_STORAGE_KEY = "openlivery.theme";
+export const THEME_STORAGE_KEY = "opennexus.theme";
 const PREFERENCES: ThemePreference[] = ["system", "light", "dark"];
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 
@@ -31,7 +31,7 @@ export function readStoredTheme(): ThemePreference {
   } catch {
     // Storage can be unavailable (private mode, blocked site data).
   }
-  const match = document.cookie.match(/(?:^|;\s*)openlivery\.theme=(system|light|dark)/);
+  const match = document.cookie.match(/(?:^|;\s*)opennexus\.theme=(system|light|dark)/);
   return match ? (match[1] as ThemePreference) : "system";
 }
 
@@ -116,7 +116,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       // Fall through to the cookie.
     }
-    document.cookie = `openlivery.theme=${next}; path=/; max-age=31536000; samesite=lax`;
+    document.cookie = `opennexus.theme=${next}; path=/; max-age=31536000; samesite=lax`;
     const current = resolveTheme(next);
     setResolved(current);
     withTransition(() => applyTheme(current));

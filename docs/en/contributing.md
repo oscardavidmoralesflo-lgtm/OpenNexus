@@ -2,7 +2,7 @@
 
 > Leer en español: [contributing.md](../es/contributing.md)
 
-Docker is the fastest way to run OpenLivery, but for day-to-day development you usually want each service running on the host with hot reload. This guide covers running the backend, frontend and WhatsApp bridge locally, the test suites, migrations and the project conventions.
+Docker is the fastest way to run OpenNexus, but for day-to-day development you usually want each service running on the host with hot reload. This guide covers running the backend, frontend and WhatsApp bridge locally, the test suites, migrations and the project conventions.
 
 ## Installation scope
 
@@ -16,8 +16,8 @@ Keep ownership checks and existing data intact when changing setup or login.
 Clone the repository and enable the pre-commit guard once per clone:
 
 ```bash
-git clone https://github.com/sarrazola/openlivery.git
-cd openlivery
+git clone https://github.com/oscardavidmoralesflo-lgtm/OpenNexus.git
+cd opennexus
 git config core.hooksPath .githooks
 ```
 
@@ -66,12 +66,12 @@ If a check fails, read its log in the pull request's **Checks** tab and push the
 fix to the same branch; the workflow runs again automatically. Workflows for
 external contributors require maintainer approval before they run.
 
-The backend tests need a **separate** database — never point them at your dev DB. They default to `openlivery_test` on localhost and create/drop all tables per test. Override the target with `TEST_DATABASE_URL`:
+The backend tests need a **separate** database — never point them at your dev DB. They default to `opennexus_test` on localhost and create/drop all tables per test. Override the target with `TEST_DATABASE_URL`:
 
 ```bash
 cd apps/api
 pytest -q
-TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/openlivery_test pytest -q
+TEST_DATABASE_URL=postgresql+psycopg://user:pass@localhost:5432/opennexus_test pytest -q
 ```
 
 Run a single test by node id:
@@ -102,7 +102,7 @@ All code, identifiers, comments, commit messages and docs are written in **Engli
 
 ## Extension points
 
-A deployment that runs OpenLivery for others may need to add to it without
+A deployment that runs OpenNexus for others may need to add to it without
 forking. These are the places that are meant for that, kept stable on purpose;
 changing their shape is a breaking change and gets a line in the changelog:
 
