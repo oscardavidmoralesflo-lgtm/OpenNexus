@@ -20,6 +20,7 @@ import { agentToolsExtensions } from "@/lib/extensions/agent-tools";
 import { EscalationRulesEditor } from "@/components/escalation-rules";
 import { ContactCaptureEditor } from "@/components/contact-capture";
 import { FollowUpEditor } from "@/components/follow-ups";
+import { HumanizationEditor } from "@/components/humanization";
 import { AgentScheduleEditor, onDutyNow } from "@/components/agent-schedule";
 import { Combobox } from "@/components/combobox";
 import { DEFAULT_PROVIDER, DEFAULT_AUDIO_MODEL, DEFAULT_EMBEDDING_MODEL, DEFAULT_IMAGE_MODEL, modelsFor, modelOptionsFor, estimateTokens, modelContextWindow, AUDIO_MODELS, EMBEDDING_MODELS, IMAGE_MODELS } from "@/lib/providers";
@@ -251,6 +252,7 @@ export default function AgentDetailPage() {
       <ContactCaptureEditor agentId={agent.id} clientId={agent.client_id} />
       <EscalationRulesEditor agentId={agent.id} clientId={agent.client_id} />
       <FollowUpEditor agentId={agent.id} />
+      <HumanizationEditor agentId={agent.id} replyDelayOn={replyDelayMax > 0} />
       <AgentScheduleEditor enabled={schedule.enabled} slots={schedule.slots} timezone={agent.client.timezone} locale={lang} onChange={setSchedule} />
       <section className="settings-section"><div className="settings-copy"><h3>{t("agents.detail.aiModelHeading")}</h3><p>{t("agents.detail.aiModelCopy")}</p></div><div className="settings-fields">
         <label>{t("agents.detail.modelLabel")}{(() => { const allowed = narrowModels(modelsFor(provider), available?.chat?.[provider]); const known = modelOptionsFor(provider).filter((item) => allowed.includes(item.id)); const ordered = [...known.filter((item) => item.recommended), ...known.filter((item) => !item.recommended)].map((item) => item.id); const options = [...ordered, ...allowed.filter((id) => !ordered.includes(id))]; const labels = Object.fromEntries(known.map((item) => [item.id, item.label])); const tierOf = (g: string) => g === "fast" ? t("agents.wizard.modelGroupFast") : g === "balanced" ? t("agents.wizard.modelGroupBalanced") : t("agents.wizard.modelGroupCapable"); const tags = Object.fromEntries(known.map((item) => [item.id, item.recommended ? t("agents.wizard.modelBadgeRecommended") : tierOf(item.group)])); return <Combobox value={model} onChange={setModel} options={options} labels={labels} tags={tags} placeholder={t("agents.detail.modelPlaceholder")} allowCustom />; })()}</label>

@@ -8,6 +8,7 @@ taken over. The caller is responsible for actually delivering the reply.
 
 import asyncio
 import random
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -43,7 +44,7 @@ from .resolution import build_resolution_spec, resolution_prompt
 from .whatsapp import deliver_reaction, send_channel_media, send_channel_message, signal_channel_read
 from .whatsapp_format import parse_reply_directives
 from .whatsapp_identity import resolve_peer_contact
-from . import sandbox
+from . import humanize, sandbox
 
 
 @dataclass
@@ -452,6 +453,12 @@ async def _reply_with_ai(db: Session, channel, conversation: Conversation, retri
     capture_holder: list = []
     if conversation.channel in ("whatsapp", "whatsapp_cloud"):
         system_content += "\n\n" + _gesture_rules(burst)
+        if agent.split_replies:
+            system_content += "\n\n" + (SPLIT_HINT_EN if agent.prompt_language == "en" else SPLIT_HINT_ES)
+    if agent.style_mirror:
+        mirror = humanize.style_mirror_prompt([llm_text(m) for m in history if m.role == "user"][-8:], agent.prompt_language)
+        if mirror:
+            system_content += "\n\n" + mirror
     if conversation.channel in ("whatsapp", "whatsapp_cloud", "instagram", "messenger"):
         rules = escalation_active_rules(db, agent)
         if escalation_enabled(db, agent, rules):
@@ -693,8 +700,15 @@ async def _debounced_reply(conversation_id: uuid.UUID, delay: float) -> None:
             burst.append(llm_text(item))
             if item.external_message_id:
                 burst_external_ids.append(item.external_message_id)
+        burst_messages = []
+        for item in history:
+            if item.role != "user":
+                break
+            burst_messages.append(item)
+        read_ids = list(reversed(burst_external_ids))
         # The loop walks newest-first; read receipts go oldest-first.
-        await _signal_read_and_typing(db, conversation, list(reversed(burst_external_ids)))
+        await _signal_read_and_typing(db, conversation, read_ids)
+        typing_since = time.monotonic()
         try:
             result = await _reply_with_ai(db, channel, conversation, "\n".join(reversed(burst)), expected_last_message_id=last.id)
         except Exception as exc:
@@ -707,19 +721,88 @@ async def _debounced_reply(conversation_id: uuid.UUID, delay: float) -> None:
             await send_reply_attachments(db, conversation, result.attachment_message_ids)
             return
         try:
-            external_id = await send_channel_message(
-                db, conversation, result.reply, quoted_external_id=result.quote_external_id
-            )
+            await _deliver_humanized(db, channel, conversation, result, read_ids, burst_messages, typing_since)
         except HTTPException as exc:
             channel.last_error = f"The reply could not be sent: {exc.detail}"
             channel.updated_at = now_utc()
             db.commit()
             return
-        if external_id and result.outbound_message_id:
-            outbound = db.get(Message, result.outbound_message_id)
-            if outbound:
-                outbound.external_message_id = external_id
-                db.commit()
         await send_reply_attachments(db, conversation, result.attachment_message_ids)
     finally:
         db.close()
+
+
+# Asked of the model when the agent splits replies, so its answer comes in
+# pieces a person would send (kept in the customer's language, like the rest
+# of the LLM-facing rules).
+SPLIT_HINT_ES = (
+    "FORMATO DE WHATSAPP: escribe como una persona en un chat. Frases cortas y naturales; "
+    "si tu respuesta tiene ideas distintas, sepáralas con una línea en blanco (cada bloque se envía como un mensaje)."
+)
+SPLIT_HINT_EN = (
+    "WHATSAPP FORMAT: write like a person in a chat. Short, natural sentences; "
+    "if your answer has separate ideas, separate them with a blank line (each block is sent as its own message)."
+)
+
+
+async def _deliver_humanized(db: Session, channel, conversation: Conversation, result: InboundResult,
+                             read_ids: list[str], burst: list[Message], typing_since: float) -> None:
+    """Send the stored reply the way the agent is set to: as a voice note, as a
+    few short messages with "typing…" in between, or as one message.
+
+    The reply was stored as one message; when it goes out in parts, that
+    message keeps the first part and each further part is stored as its own,
+    so the inbox shows exactly what the customer received."""
+    agent = sandbox.agent_for(channel, conversation)
+    outbound = db.get(Message, result.outbound_message_id) if result.outbound_message_id else None
+
+    if outbound is not None and humanize.wants_voice(agent, burst):
+        spoken = humanize.speakable(result.reply)
+        credentials = resolve_agent_credentials(db, agent)
+        if spoken and credentials:
+            try:
+                audio, mime, usage = await humanize.synthesize(*credentials, agent.voice_model, agent.voice_name, spoken)
+            except Exception:  # noqa: BLE001 - a voice that fails falls back to text
+                audio = None
+            if audio:
+                await signal_channel_read(db, conversation, read_ids, typing=True)
+                await asyncio.sleep(max(0.0, humanize.typing_seconds(spoken, agent.typing_speed_cps) / 2 - (time.monotonic() - typing_since)))
+                external_id = await send_channel_media(db, conversation, kind="audio", data=audio, mime=mime, filename="voice-note.ogg")
+                store_attachment(db, outbound, data=audio, mime=mime, kind="audio")
+                outbound.external_message_id = external_id
+                record = record_usage(db, agent.agency_id, agent.id, agent.provider,
+                                      (agent.voice_model or humanize.DEFAULT_VOICE_MODEL).strip(), usage,
+                                      conversation=conversation, purpose="voice")
+                db.commit()
+                schedule_generation_reconcile(record, usage, *credentials)
+                return
+
+    humanized = agent.split_replies or agent.typing_speed_cps > 0
+    parts = humanize.split_reply(result.reply, agent.split_max_parts) if agent.split_replies else [result.reply]
+    for index, part in enumerate(parts):
+        if index == 0:
+            if humanized:
+                # "Typing…" has been on since generation began; top it up to a
+                # person's pace for this first message.
+                await asyncio.sleep(max(0.0, humanize.typing_seconds(part, agent.typing_speed_cps) - (time.monotonic() - typing_since)))
+            message = outbound
+            if message is not None and len(parts) > 1:
+                message.content = part
+        else:
+            await signal_channel_read(db, conversation, read_ids, typing=True)
+            await asyncio.sleep(humanize.typing_seconds(part, agent.typing_speed_cps))
+            # Checked after the pause, right before sending: a person may have
+            # taken over (or the case closed) while "typing…" was showing.
+            db.expire_all()
+            db.refresh(conversation)
+            if conversation.mode == "human" or conversation.status == "resolved":
+                break
+            message = Message(conversation_id=conversation.id, role="assistant", content=part,
+                              sender_type="ai", sender_name=agent.name)
+            db.add(message)
+        external_id = await send_channel_message(
+            db, conversation, part, quoted_external_id=result.quote_external_id if index == 0 else None
+        )
+        if message is not None and external_id:
+            message.external_message_id = external_id
+        db.commit()

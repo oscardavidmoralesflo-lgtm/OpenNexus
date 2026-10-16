@@ -62,6 +62,16 @@ export type AgencyTeam = { members: AgencyMember[]; invitations: TeamInvitation[
 export type TwoFactorStatus = { enabled: boolean; recovery_codes_left: number; required_by_agency: boolean };
 export type TwoFactorSetup = { secret: string; otpauth_uri: string; qr_svg: string };
 
+export type HumanizationConfig = {
+  split_replies: boolean;
+  split_max_parts: number;
+  typing_speed_cps: number;
+  style_mirror: boolean;
+  voice_replies: "off" | "mirror" | "always";
+  voice_model: string;
+  voice_name: string;
+};
+
 export type AgentSummary = { id: string; name: string; is_active: boolean };
 
 export type IndustryLabel = { en: string; es: string };

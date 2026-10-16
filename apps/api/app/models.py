@@ -232,6 +232,20 @@ class Agent(Base):
     phone_handover_minutes: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
     reply_delay_min_seconds: Mapped[int] = mapped_column(Integer, default=6, server_default="6")
     reply_delay_max_seconds: Mapped[int] = mapped_column(Integer, default=9, server_default="9")
+    # Humanized delivery on WhatsApp (see services/humanize.py). It runs on the
+    # delayed reply path, so it needs a reply delay above zero.
+    # Long replies go out as up to ``split_max_parts`` short messages.
+    split_replies: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    split_max_parts: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
+    # "Typing…" lasts as long as a person takes to type each message, at this
+    # many characters per second (0: a natural default).
+    typing_speed_cps: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Match the customer's way of writing: formality, length, emojis.
+    style_mirror: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Voice notes: "off", "mirror" (when the customer sent one) or "always".
+    voice_replies: Mapped[str] = mapped_column(String(10), default="off", server_default="off")
+    voice_model: Mapped[str] = mapped_column(String(180), default="", server_default="")
+    voice_name: Mapped[str] = mapped_column(String(60), default="", server_default="")
     # Whether the agent may resolve a conversation itself once the contact's
     # request is settled, instead of leaving it open until it goes idle.
     resolve_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

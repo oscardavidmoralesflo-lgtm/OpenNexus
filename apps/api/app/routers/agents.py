@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from pydantic import BaseModel, Field
 from pypdf import PdfReader
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
@@ -480,3 +481,62 @@ def replace_follow_up_config(
     db.commit()
     db.refresh(agent)
     return _follow_up_out(agent)
+
+
+class HumanizationConfig(BaseModel):
+    split_replies: bool = False
+    split_max_parts: int = Field(default=3, ge=1, le=5)
+    typing_speed_cps: int = Field(default=0, ge=0, le=80)
+    style_mirror: bool = False
+    voice_replies: str = Field(default="off", pattern=r"^(off|mirror|always)$")
+    voice_model: str = Field(default="", max_length=180)
+    voice_name: str = Field(default="", max_length=60)
+
+
+class VoicePreviewIn(BaseModel):
+    text: str = Field(min_length=1, max_length=400)
+    voice_model: str = Field(default="", max_length=180)
+    voice_name: str = Field(default="", max_length=60)
+
+
+def _humanization_out(agent: Agent) -> HumanizationConfig:
+    return HumanizationConfig(
+        split_replies=agent.split_replies, split_max_parts=agent.split_max_parts, typing_speed_cps=agent.typing_speed_cps,
+        style_mirror=agent.style_mirror, voice_replies=agent.voice_replies, voice_model=agent.voice_model, voice_name=agent.voice_name,
+    )
+
+
+@router.get("/{agent_id}/humanization", response_model=HumanizationConfig)
+def get_humanization(agent_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return _humanization_out(_agent(db, user, agent_id))
+
+
+@router.put("/{agent_id}/humanization", response_model=HumanizationConfig)
+def set_humanization(agent_id: uuid.UUID, payload: HumanizationConfig, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    agent = _agent(db, user, agent_id)
+    for key, value in payload.model_dump().items():
+        setattr(agent, key, value.strip() if isinstance(value, str) else value)
+    db.commit()
+    return _humanization_out(agent)
+
+
+@router.post("/{agent_id}/humanization/voice-preview")
+async def preview_voice(agent_id: uuid.UUID, payload: VoicePreviewIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Speak a sample with a voice before turning voice notes on. Billed like any reply."""
+    from ..services import humanize
+    from ..services.providers import resolve_agent_credentials
+    from ..services.usage import record_usage, schedule_generation_reconcile
+
+    agent = _agent(db, user, agent_id)
+    credentials = resolve_agent_credentials(db, agent)
+    if not credentials:
+        raise HTTPException(status_code=409, detail="Add an AI provider key in Settings to try voices")
+    model = payload.voice_model.strip() or agent.voice_model or humanize.DEFAULT_VOICE_MODEL
+    try:
+        audio, mime, usage = await humanize.synthesize(*credentials, model, payload.voice_name.strip() or agent.voice_name, payload.text)
+    except Exception as exc:  # noqa: BLE001 - the provider's message helps pick another voice
+        raise HTTPException(status_code=502, detail=f"The voice could not be generated: {str(exc)[:300]}") from exc
+    record = record_usage(db, agent.agency_id, agent.id, agent.provider, model, usage, purpose="voice")
+    db.commit()
+    schedule_generation_reconcile(record, usage, *credentials)
+    return Response(content=audio, media_type=mime or "audio/ogg", headers={"Cache-Control": "no-store"})
