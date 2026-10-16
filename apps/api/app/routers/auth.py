@@ -1,3 +1,5 @@
+import hmac
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -40,6 +42,7 @@ def auth_status(db: Session = Depends(get_db)):
     return {
         "needs_setup": not has_agency,
         "registration_open": not has_agency,
+        "setup_token_required": not has_agency and bool(get_settings().setup_token),
     }
 
 
@@ -59,6 +62,9 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Registration is closed on this instance",
         )
+    expected = get_settings().setup_token
+    if expected and not hmac.compare_digest((payload.setup_token or "").encode(), expected.encode()):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="The setup token is not valid")
     email = payload.email.lower()
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="A user with that email already exists")

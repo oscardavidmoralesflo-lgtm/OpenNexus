@@ -13,16 +13,19 @@ from .routers import (
     agent_tools,
     agents,
     auth,
+    billing,
     catalog,
     clients,
     conversations,
     dashboard,
     domains,
     industries,
+    mcp,
     mobile,
     portal,
     providers,
     reports,
+    sandbox,
     whatsapp,
     whatsapp_cloud,
     template_webhooks,
@@ -36,6 +39,11 @@ from .routers import (
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+if settings.billing_enabled:
+    # Plans and AI credit plug into the credential and usage seams.
+    from .services.billing import install as install_billing
+    install_billing()
 
 AUTO_RESOLVE_SWEEP_SECONDS = 15 * 60
 
@@ -116,6 +124,9 @@ app.include_router(catalog.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
+app.include_router(sandbox.router, prefix="/api")
+app.include_router(billing.router, prefix="/api")
+app.include_router(billing.public_router, prefix="/api")
 app.include_router(mobile.router, prefix="/api")
 app.include_router(portal.router, prefix="/api")
 app.include_router(whatsapp.router, prefix="/api")
@@ -126,5 +137,7 @@ app.include_router(template_webhooks.router, prefix="/api")
 app.include_router(template_webhooks.public_router, prefix="/api")
 app.include_router(widget.router, prefix="/api")
 app.include_router(domains.public_router, prefix="/api")
+app.include_router(mcp.public_router, prefix="/api")
+app.include_router(mcp.router, prefix="/api")
 app.include_router(social.router, prefix="/api")
 app.include_router(social_webhook.public_router, prefix="/api")

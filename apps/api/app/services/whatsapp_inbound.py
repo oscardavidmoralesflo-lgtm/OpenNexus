@@ -43,6 +43,7 @@ from .resolution import build_resolution_spec, resolution_prompt
 from .whatsapp import deliver_reaction, send_channel_media, send_channel_message, signal_channel_read
 from .whatsapp_format import parse_reply_directives
 from .whatsapp_identity import resolve_peer_contact
+from . import sandbox
 
 
 @dataclass
@@ -250,7 +251,7 @@ async def process_inbound(
         **({"created_at": inbound.occurred_at} if inbound.occurred_at else {}),
     )
     display_content, llm_content = await resolve_inbound_content(
-        db, channel.agent, inbound, conversation=conversation, message=visitor_message
+        db, sandbox.agent_for(channel, conversation), inbound, conversation=conversation, message=visitor_message
     )
     visitor_message.content = display_content
     visitor_message.llm_content = llm_content if llm_content != display_content else None
@@ -299,7 +300,15 @@ async def process_inbound(
         await notify_needs_human(db, conversation, display_content or llm_content)
         return InboundResult(accepted=True, conversation_id=conversation.id, mode="human")
 
-    delay = reply_delay_seconds(channel.agent)
+    if conversation_channel in ("whatsapp", "whatsapp_cloud") and channel.client is not None and channel.client.is_sandbox:
+        # On the sandbox number a code picks the agent; until one does, the
+        # sandbox answers by itself and no AI credit is spent.
+        handled = sandbox.route(db, channel, conversation, inbound.text or "")
+        if handled is not None:
+            return handled
+        db.refresh(conversation)
+
+    delay = reply_delay_seconds(sandbox.agent_for(channel, conversation))
     if delay > 0:
         schedule_debounced_reply(conversation.id, delay)
         return InboundResult(accepted=True, conversation_id=conversation.id, mode="ai")
@@ -385,8 +394,8 @@ async def _reply_with_ai(db: Session, channel, conversation: Conversation, retri
     ``retrieval_query`` drives knowledge retrieval: the triggering message's
     text on the synchronous path, or the whole visitor burst when debounced.
     """
-    agent = channel.agent
     db.refresh(conversation)
+    agent = sandbox.agent_for(channel, conversation)
     if conversation.mode == "human" or conversation.status == "resolved" or not channel.is_enabled:
         return InboundResult(accepted=True, conversation_id=conversation.id, mode=conversation.mode)
     if conversation.channel == "whatsapp_cloud" and channel.coexistence:
@@ -674,7 +683,7 @@ async def _debounced_reply(conversation_id: uuid.UUID, delay: float) -> None:
         history = db.scalars(
             exchanged_only(select(Message).where(Message.conversation_id == conversation_id))
             .order_by(Message.created_at.desc())
-            .limit(channel.agent.memory_limit)
+            .limit(sandbox.agent_for(channel, conversation).memory_limit)
         ).all()
         burst: list[str] = []
         burst_external_ids: list[str] = []

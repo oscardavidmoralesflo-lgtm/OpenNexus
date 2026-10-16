@@ -3,9 +3,11 @@
 import { ReactNode, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 export function StatusBadge({ active }: { active: boolean }) {
-  return <span className={`status ${active ? "status-active" : "status-inactive"}`}><i />{active ? "Activo" : "Inactivo"}</span>;
+  const t = useT();
+  return <span className={`status ${active ? "status-active" : "status-inactive"}`}><i />{t(active ? "common.active" : "common.inactive")}</span>;
 }
 
 export function Modal({ open, title, description, onClose, children, wide = false }: { open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {

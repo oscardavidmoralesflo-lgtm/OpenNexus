@@ -13,6 +13,8 @@ import { portal } from "./dicts/portal";
 import { inbox } from "./dicts/inbox";
 import { tools } from "./dicts/tools";
 import { reports } from "./dicts/reports";
+import { sandbox } from "./dicts/sandbox";
+import { billing } from "./dicts/billing";
 
 export const en = {
   ...core.en,
@@ -27,6 +29,8 @@ export const en = {
   inbox: inbox.en,
   tools: tools.en,
   reports: reports.en,
+  sandbox: sandbox.en,
+  billing: billing.en,
 };
 
 export type Dictionary = typeof en;

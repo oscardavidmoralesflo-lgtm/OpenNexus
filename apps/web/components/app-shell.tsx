@@ -16,6 +16,7 @@ const navigation: { href: string; labelKey: I18nKey; icon: typeof LayoutDashboar
   { href: "/agents", labelKey: "nav.agents", icon: Bot },
   { href: "/inbox", labelKey: "nav.inbox", icon: Inbox },
   { href: "/reports", labelKey: "nav.reports", icon: BarChart3 },
+  { href: "/sandbox", labelKey: "nav.sandbox", icon: Sparkles },
 ];
 // Settings closes the list, after whatever a deployment adds.
 const settingsEntry = { href: "/settings", labelKey: "nav.settings" as I18nKey, icon: Settings };
@@ -126,6 +127,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             const active = pathname.startsWith(item.href);
             return <Link key={item.href} href={item.href} className={active ? "active" : ""} title={item.label} onClick={() => setMobileOpen(false)}><Icon size={18} /><span>{item.label}</span></Link>;
           })}
+          {user.agency.billing_enabled && <Link href="/billing" className={pathname.startsWith("/billing") ? "active" : ""} title={t("nav.billing")} onClick={() => setMobileOpen(false)}><CreditCard size={18} /><span>{t("nav.billing")}</span></Link>}
           <Link href={settingsEntry.href} className={pathname.startsWith(settingsEntry.href) ? "active" : ""} title={t(settingsEntry.labelKey)} onClick={() => setMobileOpen(false)}><settingsEntry.icon size={18} /><span>{t(settingsEntry.labelKey)}</span></Link>
         </nav>
         <div className="sidebar-bottom">

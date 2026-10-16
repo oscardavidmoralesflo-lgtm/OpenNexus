@@ -24,6 +24,8 @@ from ..services.knowledge import build_system_prompt, embed_document_chunks, rei
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
 MAX_PDF_BYTES = 20 * 1024 * 1024
+TEXT_SUFFIXES = (".txt", ".md", ".markdown")
+TEXT_TYPES = {"text/plain", "text/markdown", "text/x-markdown"}
 
 
 def _agent(db: Session, user: User, agent_id: uuid.UUID) -> Agent:
@@ -68,6 +70,11 @@ def list_agents(db: Session = Depends(get_db), user: User = Depends(get_current_
 def create_agent(payload: AgentCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _validate_client(db, user, payload.client_id)
     agent = Agent(agency_id=user.agency_id, **payload.model_dump())
+    client = db.get(Client, payload.client_id)
+    if client is not None and client.is_sandbox:
+        # Prospects reach a sandbox agent by its code.
+        from ..services.sandbox import assign_code
+        assign_code(db, agent)
     db.add(agent)
     db.commit()
     return _agent(db, user, agent.id)
@@ -188,23 +195,31 @@ async def upload_document(
 ):
     agent = _agent(db, user, agent_id)
     original_name = file.filename or "document.pdf"
-    if file.content_type != "application/pdf" and not original_name.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    # Plain text and Markdown (FAQs, catalogs, policies) are read as they are.
+    is_text = original_name.lower().endswith(TEXT_SUFFIXES) or (file.content_type or "") in TEXT_TYPES
+    if not is_text and file.content_type != "application/pdf" and not original_name.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF, TXT or Markdown files are allowed")
     data = await file.read(MAX_PDF_BYTES + 1)
     if len(data) > MAX_PDF_BYTES:
-        raise HTTPException(status_code=413, detail="The PDF exceeds the 20 MB limit")
+        raise HTTPException(status_code=413, detail="The file exceeds the 20 MB limit")
 
     safe_name = re.sub(r"[^\w. -]", "_", Path(original_name).name)[:220] or "document.pdf"
     document = KnowledgeDocument(agent_id=agent.id, filename=safe_name, file_data=data, status="processed")
-    try:
-        reader = PdfReader(BytesIO(data))
-        document.extracted_text = "\n\n".join((page.extract_text() or "").strip() for page in reader.pages).strip()
+    if is_text:
+        document.extracted_text = data.decode("utf-8", "replace").strip()
         if not document.extracted_text:
             document.status = "error"
-            document.error_message = "No extractable text was found in the PDF. It may be a scanned document."
-    except Exception:
-        document.status = "error"
-        document.error_message = "The PDF could not be processed. Check that the file is not damaged or protected."
+            document.error_message = "The file is empty."
+    else:
+        try:
+            reader = PdfReader(BytesIO(data))
+            document.extracted_text = "\n\n".join((page.extract_text() or "").strip() for page in reader.pages).strip()
+            if not document.extracted_text:
+                document.status = "error"
+                document.error_message = "No extractable text was found in the PDF. It may be a scanned document."
+        except Exception:
+            document.status = "error"
+            document.error_message = "The PDF could not be processed. Check that the file is not damaged or protected."
     db.add(document)
     db.commit()
     db.refresh(document)

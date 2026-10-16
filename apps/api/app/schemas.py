@@ -22,6 +22,8 @@ class RegisterRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    # Required when the deployment sets SETUP_TOKEN.
+    setup_token: str | None = Field(default=None, max_length=256)
 
 
 class LoginRequest(BaseModel):
@@ -35,6 +37,7 @@ class AgencyOut(ORMModel):
     slug: str
     brand_color: str
     logo_url: str | None = None
+    billing_enabled: bool = False
 
 
 class AgencyUpdate(BaseModel):
@@ -111,6 +114,7 @@ class AgentSummary(ORMModel):
 class ClientOut(ORMModel):
     id: uuid.UUID
     name: str
+    is_sandbox: bool = False
     industry: str
     business_type: str
     business_custom: str
@@ -182,6 +186,25 @@ class ClientDomainOut(BaseModel):
     # DNS records the operator/client must create.
     txt_host: str | None
     txt_value: str | None
+
+
+class WorkspaceDomainOut(BaseModel):
+    # The address the workspace answers on with no setup, when the deployment
+    # serves agencies under a base domain; None otherwise.
+    branded_url: str | None
+    # The agency's own domain and where its verification stands.
+    domain: str | None
+    verified: bool
+    txt_host: str | None
+    txt_value: str | None
+    # Where the domain must point (CNAME), and whether it already does.
+    cname_target: str | None
+    dns_ok: bool
+    # Certificates are issued on demand once the domain is verified.
+    ssl_ready: bool
+    # The address the workspace is reached at: the own domain once verified,
+    # else the branded one, else the primary one.
+    primary_url: str
 
 
 class ProviderKeyUpdate(BaseModel):
@@ -307,6 +330,7 @@ class AgentUpdate(BaseModel):
 class AgentOut(ORMModel):
     id: uuid.UUID
     client_id: uuid.UUID
+    sandbox_code: str | None = None
     provider: str
     name: str
     instructions: str

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..database import get_db
 from ..deps import get_current_user
 from .. import industries
-from ..models import Agent, AgentCaptureField, Client, Contact, ContactField, Conversation, PortalUser, PushDevice, User, new_domain_token, Team
+from ..models import Agency, Agent, AgentCaptureField, Client, Contact, ContactField, Conversation, PortalUser, PushDevice, User, new_domain_token, Team
 from ..portal_permissions import DEFAULT_ROLE
 from ..schemas import (
     ClientDeletionPreview,
@@ -98,6 +98,8 @@ def list_clients(db: Session = Depends(get_db), user: User = Depends(get_current
 @router.post("", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
 def create_client(payload: ClientCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _check_industry(payload.industry, payload.business_type)
+    from ..services.billing import check_client_limit
+    check_client_limit(db, user.agency)
     client = Client(
         agency_id=user.agency_id,
         portal_slug=unique_slug(db, Client, "portal_slug", payload.name),
@@ -209,7 +211,7 @@ def set_client_domain(
     client = _client(db, user, client_id)
     domain = payload.domain.strip().lower()
     taken = db.scalar(select(Client).where(Client.portal_domain == domain, Client.id != client.id))
-    if taken:
+    if taken or db.scalar(select(Agency.id).where(Agency.workspace_domain == domain)):
         raise HTTPException(status_code=409, detail="That domain is already in use")
     # Re-assigning resets verification and issues a fresh challenge token.
     if client.portal_domain != domain or not client.portal_domain_token:

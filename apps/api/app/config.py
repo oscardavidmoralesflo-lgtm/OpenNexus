@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,9 @@ class Settings(BaseSettings):
     encryption_key: str = "dev-local-change-this-key-too"
     frontend_url: str = "http://localhost:3000"
     access_token_minutes: int = 60 * 24 * 7
+    # When set, first-run setup asks for this value, so a fresh deploy cannot
+    # be claimed by whoever reaches it first. Unset leaves setup open as before.
+    setup_token: str = ""
     # Session cookie flags. Defaults suit local HTTP; set cookie_secure=true (and
     # cookie_samesite=none when the frontend and API are on different sites)
     # behind HTTPS in production.
@@ -87,6 +91,55 @@ class Settings(BaseSettings):
     # portal's sign-in page and under Preferences. Empty shows nothing.
     portal_ios_app_url: str = ""
     portal_android_app_url: str = ""
+
+    # Workspace domains. With a base domain set (e.g. "app.example.com", a
+    # wildcard DNS record pointing at the gateway), the agency is also served
+    # at "<agency slug>.<base>" with no setup. ``workspace_cname_target`` is
+    # the host an agency's own domain must point at; empty uses the host of
+    # ``frontend_url``.
+    workspace_base_domain: str = ""
+    workspace_cname_target: str = ""
+
+    # Plans and AI credit, for an operator who hosts this workspace for an
+    # agency and charges for it. Off by default: a self-hosted install that
+    # brings its own AI key needs none of it. See docs/en/billing.md.
+    billing_enabled: bool = False
+    # Plans as JSON: [{"id", "name", "price_usd", "max_clients" (null = no
+    # limit), "stripe_price_id"}]. Empty uses the three defaults below.
+    billing_plans: str = ""
+    # The plan in force while there is no active subscription (a trial).
+    # Empty means no clients can be created until the agency subscribes.
+    billing_default_plan: str = "launch"
+    # The OpenRouter key the platform answers with when the agency has none of
+    # its own; each reply it pays for is charged to the agency's credit.
+    billing_platform_key: str = ""
+    # What a reply costs the agency in credit, as a multiple of what it cost
+    # the platform (1.0 = at cost).
+    billing_credit_markup: float = 1.0
+    # Extra credit on every top-up, in percent (30 = pay 10, get 13).
+    billing_topup_bonus_percent: float = 0.0
+    # Top-up amounts offered, in USD, comma-separated.
+    billing_topup_amounts: str = "10,25,50,100"
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_api_base: str = "https://api.stripe.com/v1"
+
+    @field_validator("backend_url", "whatsapp_bridge_url")
+    @classmethod
+    def _http_scheme(cls, value: str) -> str:
+        """A private network may give an internal address as bare host:port."""
+        value = value.strip()
+        return value if "://" in value or not value else f"http://{value}"
+
+    @field_validator("database_url")
+    @classmethod
+    def _psycopg_driver(cls, value: str) -> str:
+        """Hosts hand out ``postgres://`` or ``postgresql://`` URLs (Render,
+        Heroku, Supabase); SQLAlchemy needs the psycopg 3 driver named."""
+        for prefix in ("postgres://", "postgresql://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg://" + value[len(prefix):]
+        return value
 
     model_config = SettingsConfigDict(
         env_file=(REPO_ROOT / ".env", APP_DIR / ".env"),

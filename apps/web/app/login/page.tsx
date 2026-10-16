@@ -8,7 +8,7 @@ import { useT } from "@/lib/i18n";
 import { Alert } from "@/components/ui";
 import { PasswordInput } from "@/components/password-input";
 
-type AuthStatus = { needs_setup: boolean; registration_open: boolean };
+type AuthStatus = { needs_setup: boolean; registration_open: boolean; setup_token_required?: boolean };
 
 export default function LoginPage() {
   const t = useT();
@@ -84,6 +84,7 @@ export default function LoginPage() {
               {mode === "register" && <>
                 <label>{t("auth.agencyName")}<input name="agency_name" required minLength={2} placeholder={t("auth.agencyNamePlaceholder")} /></label>
                 <label>{t("auth.yourName")}<input name="name" required minLength={2} placeholder={t("auth.yourNamePlaceholder")} /></label>
+                {authStatus.setup_token_required && <label>{t("auth.setupToken")}<PasswordInput name="setup_token" required placeholder={t("auth.setupTokenPlaceholder")} /></label>}
               </>}
               <label>{t("auth.email")}<input name="email" required type="email" placeholder={t("auth.emailPlaceholder")} /></label>
               <label>{t("auth.password")}<PasswordInput name="password" required minLength={8} placeholder={t("auth.passwordPlaceholder")} /></label>

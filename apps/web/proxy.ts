@@ -6,7 +6,9 @@ import type { NextRequest } from "next/server";
 // so the browser URL stays on the client's own domain. Requests on the primary
 // domain resolve to nothing and pass through untouched.
 
-const BACKEND_URL = process.env.BACKEND_INTERNAL_URL || "http://api:8000";
+// A private network may give it as bare host:port (Render's private services).
+const RAW_BACKEND_URL = process.env.BACKEND_INTERNAL_URL || "http://api:8000";
+const BACKEND_URL = RAW_BACKEND_URL.includes("://") ? RAW_BACKEND_URL : `http://${RAW_BACKEND_URL}`;
 const CACHE_TTL_MS = 60_000;
 
 type Resolution = { slug: string | null; expires: number };

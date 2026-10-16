@@ -33,9 +33,29 @@ class Agency(Base):
     brand_color: Mapped[str] = mapped_column(String(20), default="#075985")
     logo_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     logo_mime: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # The agency's own domain for the whole workspace: sign-in, dashboard and
+    # client portals. Verified through a DNS TXT challenge like a portal domain;
+    # only a verified one is routed and gets an on-demand certificate.
+    workspace_domain: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    workspace_domain_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    workspace_domain_token: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # Billing (only read when the deployment turns billing on). The plan the
+    # subscription pays for, its state as the payment provider reports it, and
+    # the AI credit the platform's key draws from.
+    plan: Mapped[str] = mapped_column(String(40), default="", server_default="")
+    subscription_status: Mapped[str] = mapped_column(String(30), default="none", server_default="none")
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    credit_balance: Mapped[float] = mapped_column(Numeric(14, 6), default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     users: Mapped[list["User"]] = relationship(back_populates="agency", cascade="all, delete-orphan")
+
+    @property
+    def billing_enabled(self) -> bool:
+        from .config import get_settings
+
+        return get_settings().billing_enabled
 
     @property
     def logo_url(self) -> str | None:
@@ -73,6 +93,10 @@ class Client(Base):
     # the client tells the time in it; the prompt reads it from here.
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The agency's sandbox: one WhatsApp number where prospects try the agents
+    # built for them, each reached by its code. One per agency, made on demand,
+    # and never counted as a client of the plan.
+    is_sandbox: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Optional per-client logo, shown in the widget and portal (falls back to
     # the agency logo). Bytes stored in Postgres like the agency logo.
     logo_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
@@ -137,6 +161,8 @@ class Agent(Base):
     agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(180))
+    # On the sandbox number, the code a prospect sends to talk to this agent.
+    sandbox_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     # What this agent does: its job, tasks and rules, in prose.
     instructions: Mapped[str] = mapped_column(Text, default="")
     personality: Mapped[str] = mapped_column(Text, default="")
@@ -1181,3 +1207,89 @@ class SocialHistoryImport(Base):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class McpToken(Base):
+    """A personal token an external AI agent (Claude Code, Cursor, Codex…) uses
+    to reach the workspace over MCP. It acts as the person who created it.
+
+    Only a SHA-256 of the secret is stored; the secret is shown once."""
+
+    __tablename__ = "mcp_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # The first characters of the secret, so a person can tell tokens apart.
+    prefix: Mapped[str] = mapped_column(String(16))
+    # Read-only tokens may list and read, never change anything or spend credit.
+    read_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[User] = relationship()
+
+
+class McpActivity(Base):
+    """One tool call an external agent made: when, with which token, what it changed."""
+
+    __tablename__ = "mcp_activity"
+    __table_args__ = (Index("ix_mcp_activity_agency_created", "agency_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"))
+    token_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("mcp_tokens.id", ondelete="SET NULL"), nullable=True, index=True)
+    tool: Mapped[str] = mapped_column(String(80))
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    # A short description of the call's arguments and of what came of it.
+    arguments: Mapped[dict] = mapped_column(JSON, default=dict)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    token: Mapped["McpToken | None"] = relationship()
+
+
+class SandboxSession(Base):
+    """Which sandbox agent a chat on the sandbox number is talking to.
+
+    Kept per chat rather than per conversation, so a prospect who comes back
+    after their case was resolved still reaches the agent they chose."""
+
+    __tablename__ = "sandbox_sessions"
+    __table_args__ = (UniqueConstraint("client_id", "external_chat_id", name="uq_sandbox_sessions_chat"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    external_chat_id: Mapped[str] = mapped_column(String(255))
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    agent: Mapped[Agent] = relationship()
+
+
+class CreditTransaction(Base):
+    """One movement of an agency's AI credit: a top-up, its bonus, a reply the
+    platform's key paid for, or a manual adjustment. ``amount_usd`` is signed."""
+
+    __tablename__ = "credit_transactions"
+    __table_args__ = (
+        Index("ix_credit_transactions_agency_created", "agency_id", "created_at"),
+        # A payment or a usage record is applied once, however often it is reported.
+        UniqueConstraint("kind", "reference", name="uq_credit_transactions_reference"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    amount_usd: Mapped[float] = mapped_column(Numeric(14, 6))
+    balance_after: Mapped[float] = mapped_column(Numeric(14, 6))
+    description: Mapped[str] = mapped_column(String(240), default="")
+    reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    usage_record_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("usage_records.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    usage_record: Mapped["UsageRecord | None"] = relationship(lazy="noload")

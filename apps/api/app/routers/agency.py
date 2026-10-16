@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import get_current_user
-from ..models import Agency, User
-from ..schemas import AgencyOut, AgencyUpdate
+from ..models import Agency, Client, User, new_domain_token
+from ..schemas import AgencyOut, AgencyUpdate, ClientDomainSet, WorkspaceDomainOut
+from ..services import dns as dns_service
+from ..services import workspace_domain
 from ..slugs import slugify
 
 
@@ -75,3 +77,54 @@ def delete_logo(db: Session = Depends(get_db), user: User = Depends(get_current_
     user.agency.logo_mime = None
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/domain", response_model=WorkspaceDomainOut)
+def get_workspace_domain(check: bool = False, user: User = Depends(get_current_user)):
+    return workspace_domain.describe(user.agency, check_dns=check)
+
+
+@router.put("/domain", response_model=WorkspaceDomainOut)
+def set_workspace_domain(
+    payload: ClientDomainSet,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    agency = user.agency
+    domain = payload.domain.strip().lower()
+    if domain in (workspace_domain.primary_host(), workspace_domain.branded_host(agency)):
+        raise HTTPException(status_code=400, detail="That address is already served by the platform")
+    taken = db.scalar(select(Agency).where(Agency.workspace_domain == domain, Agency.id != agency.id))
+    if taken or db.scalar(select(Client).where(Client.portal_domain == domain)):
+        raise HTTPException(status_code=409, detail="That domain is already in use")
+    if agency.workspace_domain != domain or not agency.workspace_domain_token:
+        agency.workspace_domain_token = new_domain_token()
+        agency.workspace_domain_verified = False
+    agency.workspace_domain = domain
+    db.commit()
+    db.refresh(agency)
+    return workspace_domain.describe(agency)
+
+
+@router.post("/domain/verify", response_model=WorkspaceDomainOut)
+def verify_workspace_domain(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    agency = user.agency
+    if not agency.workspace_domain:
+        raise HTTPException(status_code=400, detail="Add a domain before verifying it")
+    if not dns_service.txt_contains(agency.workspace_domain, agency.workspace_domain_token):
+        raise HTTPException(status_code=400, detail="The verification TXT record was not found yet. DNS can take a while to propagate.")
+    agency.workspace_domain_verified = True
+    db.commit()
+    db.refresh(agency)
+    return workspace_domain.describe(agency, check_dns=True)
+
+
+@router.delete("/domain", response_model=WorkspaceDomainOut)
+def delete_workspace_domain(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    agency = user.agency
+    agency.workspace_domain = None
+    agency.workspace_domain_verified = False
+    agency.workspace_domain_token = ""
+    db.commit()
+    db.refresh(agency)
+    return workspace_domain.describe(agency)

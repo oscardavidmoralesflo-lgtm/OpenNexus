@@ -6,7 +6,52 @@ export type User = {
   agency: Agency;
 };
 
-export type Agency = { id: string; name: string; slug: string; brand_color: string; logo_url: string | null };
+export type Agency = { id: string; name: string; slug: string; brand_color: string; logo_url: string | null; billing_enabled?: boolean };
+
+export type WorkspaceDomain = {
+  branded_url: string | null;
+  domain: string | null;
+  verified: boolean;
+  txt_host: string | null;
+  txt_value: string | null;
+  cname_target: string | null;
+  dns_ok: boolean;
+  ssl_ready: boolean;
+  primary_url: string;
+};
+
+export type McpAccess = { endpoint: string; tools: { name: string; description: string; writes: boolean }[] };
+export type McpToken = { id: string; name: string; prefix: string; read_only: boolean; created_by: string; created_at: string; last_used_at: string | null };
+export type McpTokenCreated = McpToken & { secret: string };
+export type McpActivity = { id: string; tool: string; ok: boolean; token_name: string | null; arguments: Record<string, unknown>; summary: string; created_at: string };
+
+export type SandboxAgent = { id: string; name: string; code: string; model: string; is_active: boolean; prospects: number; share_link: string | null };
+export type Sandbox = {
+  client_id: string;
+  name: string;
+  number: { kind: string; status: string; phone_number: string | null; display_name: string | null } | null;
+  agents: SandboxAgent[];
+};
+
+export type BillingPlan = { id: string; name: string; price_usd: number; max_clients: number | null };
+export type BillingOverview = {
+  enabled: boolean;
+  plans: BillingPlan[];
+  plan: BillingPlan | null;
+  subscribed: boolean;
+  subscription_status: string;
+  clients_used: number;
+  credit_balance: number;
+  platform_key: boolean;
+  own_key: boolean;
+  topup_amounts: number[];
+  topup_bonus_percent: number;
+  payments: boolean;
+  customer_id: string | null;
+};
+export type BillingSpendSide = { usd: number; replies: number; percent: number };
+export type BillingSpend = { days: number; platform: BillingSpendSide; own: BillingSpendSide };
+export type CreditTransaction = { id: string; kind: string; amount_usd: number; balance_after: number; description: string; created_at: string };
 
 export type AgentSummary = { id: string; name: string; is_active: boolean };
 
@@ -15,6 +60,7 @@ export type BusinessType = { code: string; label: IndustryLabel };
 export type Industry = { code: string; label: IndustryLabel; types: BusinessType[] };
 
 export type Client = {
+  is_sandbox?: boolean;
   id: string;
   name: string;
   industry: string;

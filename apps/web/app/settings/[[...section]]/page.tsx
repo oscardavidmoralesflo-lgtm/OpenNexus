@@ -1,18 +1,41 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Eye, EyeOff, ImagePlus, LoaderCircle, PauseCircle, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LoaderCircle, Palette, PauseCircle, Save, ShieldCheck, SlidersHorizontal, Trash2 } from "lucide-react";
 import { Alert, PageHead } from "@/components/ui";
 import { FormSkeleton } from "@/components/skeleton";
 import { PreferencesSection } from "@/components/preferences-section";
+import { SectionTabs, type SectionTab } from "@/components/section-tabs";
+import { WorkspaceDomainSection } from "@/components/settings/workspace-domain";
+import { McpAccessSection } from "@/components/settings/mcp-access";
 import { useToast } from "@/components/toast";
 import { api, messageFrom } from "@/lib/api";
+import { currentSections, showSections } from "@/lib/section-path";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { PROVIDERS } from "@/lib/providers";
 import type { Agency, Provider, ProviderTest } from "@/types";
 
+type SettingsTab = "identity" | "domain" | "providers" | "preferences" | "agents";
+const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "providers", "preferences", "agents"];
+
 export default function SettingsPage() {
   const t = useT();
+  const [tab, setTab] = useState<SettingsTab>("identity");
+  // The open tab rides in the address (`/settings/domain`).
+  useEffect(() => {
+    const [section] = currentSections("/settings");
+    const wanted = section && (SETTINGS_TABS as string[]).includes(section) ? section as SettingsTab : "identity";
+    setTab(wanted);
+    showSections("/settings", [wanted]);
+  }, []);
+  const changeTab = (next: SettingsTab) => { setTab(next); showSections("/settings", [next]); };
+  const tabs: SectionTab<SettingsTab>[] = [
+    { id: "identity", label: t("settings.tabs.identity"), icon: Palette },
+    { id: "domain", label: t("settings.tabs.domain"), icon: Globe2 },
+    { id: "providers", label: t("settings.tabs.providers"), icon: KeyRound },
+    { id: "preferences", label: t("settings.tabs.preferences"), icon: SlidersHorizontal },
+    { id: "agents", label: t("settings.tabs.agents"), icon: Bot },
+  ];
   const toast = useToast();
   const [agency, setAgency] = useState<Agency | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -66,16 +89,22 @@ export default function SettingsPage() {
   if (!agency) return <div className="page"><PageHead eyebrow={t("settings.index.eyebrow")} title={t("settings.index.title")} description={t("settings.index.description")} /><FormSkeleton sections={2} /></div>;
   return <div className="page"><PageHead eyebrow={t("settings.index.eyebrow")} title={t("settings.index.title")} description={t("settings.index.description")} />
 
-    <form className="page-form" onSubmit={saveIdentity}><section className="form-section"><div className="section-copy"><h2>{t("settings.index.identityHeading")}</h2><p>{t("settings.index.identityCopy")}</p></div><div className="form-fields"><div className="logo-editor"><button type="button" className="logo-preview" onClick={() => fileRef.current?.click()}>{agency.logo_url ? <img src={`${agency.logo_url}?v=${logoVersion}`} alt={t("settings.index.logoAlt")} /> : <ImagePlus size={24} />}</button><div><strong>{t("settings.index.logoLabel")}</strong><small>{t("settings.index.logoHint")}</small><div><button type="button" className="text-button" onClick={() => fileRef.current?.click()}>{t("settings.index.change")}</button>{agency.logo_url && <button type="button" className="text-button danger-text" onClick={deleteLogo}><Trash2 size={14} /> {t("settings.index.remove")}</button>}</div></div><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(e) => uploadLogo(e.target.files?.[0])} /></div><div className="form-grid"><label>{t("settings.index.agencyName")}<input name="name" required defaultValue={agency.name} /></label><label>{t("settings.index.identifier")}<input name="slug" required defaultValue={agency.slug} /></label></div><label>{t("settings.index.brandColor")}<div className="color-input"><input type="color" name="brand_color" defaultValue={agency.brand_color} /><input defaultValue={agency.brand_color} readOnly /></div></label><button className="button primary align-start" disabled={busy}>{busy ? <LoaderCircle size={17} className="spin" /> : <Save size={17} />} {t("settings.index.saveIdentity")}</button></div></section></form>
+    <SectionTabs tabs={tabs} value={tab} onChange={changeTab} />
 
-    <section className="section-block"><div className="section-heading"><div><h2>{t("settings.providers.heading")}</h2><p>{t("settings.providers.copy")}</p></div></div>
+    {tab === "identity" && <form className="page-form" onSubmit={saveIdentity}><section className="form-section"><div className="section-copy"><h2>{t("settings.index.identityHeading")}</h2><p>{t("settings.index.identityCopy")}</p></div><div className="form-fields"><div className="logo-editor"><button type="button" className="logo-preview" onClick={() => fileRef.current?.click()}>{agency.logo_url ? <img src={`${agency.logo_url}?v=${logoVersion}`} alt={t("settings.index.logoAlt")} /> : <ImagePlus size={24} />}</button><div><strong>{t("settings.index.logoLabel")}</strong><small>{t("settings.index.logoHint")}</small><div><button type="button" className="text-button" onClick={() => fileRef.current?.click()}>{t("settings.index.change")}</button>{agency.logo_url && <button type="button" className="text-button danger-text" onClick={deleteLogo}><Trash2 size={14} /> {t("settings.index.remove")}</button>}</div></div><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(e) => uploadLogo(e.target.files?.[0])} /></div><div className="form-grid"><label>{t("settings.index.agencyName")}<input name="name" required defaultValue={agency.name} /></label><label>{t("settings.index.identifier")}<input name="slug" required defaultValue={agency.slug} /></label></div><label>{t("settings.index.brandColor")}<div className="color-input"><input type="color" name="brand_color" defaultValue={agency.brand_color} /><input defaultValue={agency.brand_color} readOnly /></div></label><button className="button primary align-start" disabled={busy}>{busy ? <LoaderCircle size={17} className="spin" /> : <Save size={17} />} {t("settings.index.saveIdentity")}</button></div></section></form>}
+
+    {tab === "domain" && <WorkspaceDomainSection />}
+
+    {tab === "providers" && <section className="section-block"><div className="section-heading"><div><h2>{t("settings.providers.heading")}</h2><p>{t("settings.providers.copy")}</p></div></div>
       <div className="security-note"><ShieldCheck size={20} /><span><strong>{t("settings.index.privateCredentials")}</strong> {t("settings.index.privateCredentialsCopy")}</span></div>
       {PROVIDERS.map((preset) => (
         <ProviderKeyCard key={preset.id} preset={preset} state={providers.find((x) => x.provider === preset.id)} busy={busy} onSave={saveKey} onRemove={removeKey} onToggle={toggleKey} t={t} />
       ))}
-    </section>
+    </section>}
 
-    <PreferencesSection />
+    {tab === "preferences" && <PreferencesSection />}
+
+    {tab === "agents" && <McpAccessSection />}
   </div>;
 }
 
