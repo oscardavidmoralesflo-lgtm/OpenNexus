@@ -47,6 +47,7 @@ Everything you need to build, brand and operate AI agents for your clients.
 
 **Self-hosting**
 
+- [Team and security](en/team-and-security.md) — Invitations, roles and two-step verification.
 - [Deploy on Render](en/deploy-render.md) — The whole stack from one Blueprint, private until you claim it with the setup token.
 - [Self-hosting](en/self-hosting.md) — Deploy to a server, back up data, upgrade and troubleshoot.
 - [Contributing](en/contributing.md) — Run the project locally, the test suites and the conventions.
@@ -92,6 +93,7 @@ Todo lo que necesitas para construir, marcar y operar agentes de IA para tus cli
 
 **Autoalojamiento**
 
+- [Equipo y seguridad](es/team-and-security.md) — Invitaciones, roles y verificación en dos pasos.
 - [Desplegar en Render](es/deploy-render.md) — Todo el stack desde un Blueprint, privado hasta que lo reclamas con el token de instalación.
 - [Autoalojamiento](es/self-hosting.md) — Despliega en un servidor, respalda datos, actualiza y resuelve problemas.
 - [Contribuir](es/contributing.md) — Ejecuta el proyecto en local, las suites de pruebas y las convenciones.

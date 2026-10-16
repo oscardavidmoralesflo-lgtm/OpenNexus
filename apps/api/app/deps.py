@@ -25,3 +25,14 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+def user_from_token(db: Session, access_token: str | None) -> User | None:
+    """The user a dashboard session cookie belongs to, or None, without raising."""
+    user_id = decode_access_token(access_token) if access_token else None
+    if not user_id:
+        return None
+    try:
+        return db.get(User, uuid.UUID(user_id))
+    except ValueError:
+        return None

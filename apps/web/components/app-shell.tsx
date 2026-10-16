@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { useLanguage, type I18nKey } from "@/lib/i18n";
 import { CommunityLinks } from "@/components/community-links";
 import { appShellExtensions } from "@/lib/extensions/app-shell";
+import { CurrentUserContext, isManager } from "@/lib/current-user";
 import type { User } from "@/types";
 
 const navigation: { href: string; labelKey: I18nKey; icon: typeof LayoutDashboard }[] = [
@@ -69,10 +70,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isLogin = pathname === "/login";
   const isPortal = pathname.startsWith("/portal/");
   const isWidget = pathname.startsWith("/widget/");
+  const isInvite = pathname.startsWith("/invite/");
   const isExtraPublic = EXTRA_PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
-  const isBare = isLogin || isPortal || isWidget || isExtraPublic;
+  const isBare = isLogin || isPortal || isWidget || isInvite || isExtraPublic;
 
   // Check the session on entry and revalidate it on every navigation, without
   // taking the shell off screen to do it: `loading` starts true and is only ever
@@ -84,7 +86,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (isBare) { setLoading(false); setUser(null); return; }
     let cancelled = false;
     api<User>("/auth/me")
-      .then((current) => { if (!cancelled) setUser(current); })
+      .then((current) => {
+        if (cancelled) return;
+        setUser(current);
+        // The agency asks everyone for two-step verification: until it is on,
+        // Security is the only place to go.
+        if (current.agency.require_two_factor && !current.two_factor_enabled && pathname !== "/settings/security") router.replace("/settings/security");
+      })
       .catch(() => { if (!cancelled) { setUser(null); router.replace("/login"); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -118,7 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {WorkspaceLabel ? <WorkspaceLabel user={user}>{workspaceLabel}</WorkspaceLabel> : workspaceLabel}
         <nav>
           <span className="nav-label">{t("nav.section")}</span>
-          {navigation.map((item) => {
+          {navigation.filter((item) => item.href !== "/sandbox" || isManager(user.role)).map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return <Link key={item.href} href={item.href} className={active ? "active" : ""} title={t(item.labelKey)} onClick={() => setMobileOpen(false)}><item.icon size={18} /><span>{t(item.labelKey)}</span></Link>;
           })}
@@ -127,7 +135,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             const active = pathname.startsWith(item.href);
             return <Link key={item.href} href={item.href} className={active ? "active" : ""} title={item.label} onClick={() => setMobileOpen(false)}><Icon size={18} /><span>{item.label}</span></Link>;
           })}
-          {user.agency.billing_enabled && <Link href="/billing" className={pathname.startsWith("/billing") ? "active" : ""} title={t("nav.billing")} onClick={() => setMobileOpen(false)}><CreditCard size={18} /><span>{t("nav.billing")}</span></Link>}
+          {user.agency.billing_enabled && user.role === "owner" && <Link href="/billing" className={pathname.startsWith("/billing") ? "active" : ""} title={t("nav.billing")} onClick={() => setMobileOpen(false)}><CreditCard size={18} /><span>{t("nav.billing")}</span></Link>}
           <Link href={settingsEntry.href} className={pathname.startsWith(settingsEntry.href) ? "active" : ""} title={t(settingsEntry.labelKey)} onClick={() => setMobileOpen(false)}><settingsEntry.icon size={18} /><span>{t(settingsEntry.labelKey)}</span></Link>
         </nav>
         <div className="sidebar-bottom">
@@ -139,7 +147,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
-      <main className="main-content">{children}</main>
+      <main className="main-content"><CurrentUserContext.Provider value={user}>{children}</CurrentUserContext.Provider></main>
     </div>
   );
 }

@@ -12,6 +12,8 @@ pypdf==6.14.2
 httpx==0.28.1
 mcp==1.28.1
 dnspython==2.7.0
+# QR code (SVG) for setting up two-step verification in an authenticator app.
+segno==1.6.6
 email-validator==2.2.0
 # The slim base image ships only a partial system zoneinfo database, so
 # ZoneInfo() raises for valid IANA link/alias names the frontend offers from

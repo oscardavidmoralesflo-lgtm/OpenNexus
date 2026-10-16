@@ -1,12 +1,14 @@
+export type TeamRole = "owner" | "admin" | "operator" | "viewer";
 export type User = {
   id: string;
   name: string;
   email: string;
-  role: string;
+  role: TeamRole;
+  two_factor_enabled?: boolean;
   agency: Agency;
 };
 
-export type Agency = { id: string; name: string; slug: string; brand_color: string; logo_url: string | null; billing_enabled?: boolean };
+export type Agency = { id: string; name: string; slug: string; brand_color: string; logo_url: string | null; billing_enabled?: boolean; require_two_factor?: boolean };
 
 export type WorkspaceDomain = {
   branded_url: string | null;
@@ -52,6 +54,13 @@ export type BillingOverview = {
 export type BillingSpendSide = { usd: number; replies: number; percent: number };
 export type BillingSpend = { days: number; platform: BillingSpendSide; own: BillingSpendSide };
 export type CreditTransaction = { id: string; kind: string; amount_usd: number; balance_after: number; description: string; created_at: string };
+
+export type AgencyMember = { id: string; name: string; email: string; role: TeamRole; two_factor_enabled: boolean; last_login_at: string | null; created_at: string; is_you: boolean };
+export type TeamInvitation = { id: string; email: string; role: TeamRole; invited_by: string | null; expires_at: string; created_at: string };
+export type TeamInvitationCreated = TeamInvitation & { link: string };
+export type AgencyTeam = { members: AgencyMember[]; invitations: TeamInvitation[]; require_two_factor: boolean; your_role: TeamRole };
+export type TwoFactorStatus = { enabled: boolean; recovery_codes_left: number; required_by_agency: boolean };
+export type TwoFactorSetup = { secret: string; otpauth_uri: string; qr_svg: string };
 
 export type AgentSummary = { id: string; name: string; is_active: boolean };
 

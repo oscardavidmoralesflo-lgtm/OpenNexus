@@ -104,7 +104,7 @@ def test_register_login_logout_and_me(client: TestClient):
 
 def test_single_agency_instance_closes_registration(client: TestClient):
     status = client.get("/api/auth/status").json()
-    assert status == {"needs_setup": True, "registration_open": True}
+    assert status == {"needs_setup": True, "registration_open": True, "setup_token_required": False}
 
     first = client.post(
         "/api/auth/register",
@@ -113,7 +113,7 @@ def test_single_agency_instance_closes_registration(client: TestClient):
     assert first.status_code == 201
 
     status = client.get("/api/auth/status").json()
-    assert status == {"needs_setup": False, "registration_open": False}
+    assert status == {"needs_setup": False, "registration_open": False, "setup_token_required": False}
 
     second = client.post(
         "/api/auth/register",

@@ -373,6 +373,8 @@ async def call_tool(db: Session, token: McpToken, name: str, args: dict) -> dict
     try:
         if tool.writes and token.read_only:
             raise ToolError("This token is read-only; create a token with write access to change things")
+        if tool.writes and token.user.role not in ("owner", "admin"):
+            raise ToolError("Your role in the agency can read but not change things")
         payload = _jsonable(await tool.run(db, token.user, args or {}))
         summary = _outcome(name, payload)
     except HTTPException as exc:
@@ -415,7 +417,8 @@ async def handle(db: Session, token: McpToken, message: dict) -> dict | None:
     if method == "ping":
         return _result(request_id, {})
     if method == "tools/list":
-        tools = [t for t in TOOLS if not (t.writes and token.read_only)]
+        read_only = token.read_only or token.user.role not in ("owner", "admin")
+        tools = [t for t in TOOLS if not (t.writes and read_only)]
         return _result(request_id, {"tools": [
             {"name": t.name, "description": t.description, "inputSchema": t.input_schema,
              "annotations": {"readOnlyHint": not t.writes}} for t in tools

@@ -26,7 +26,7 @@ def test_removed_registration_setting_cannot_reopen_setup(client, monkeypatch):
     settings = Settings(_env_file=None)
     monkeypatch.setattr(auth, "get_settings", lambda: settings)
     assert client.post("/api/auth/register", json=owner(1)).status_code == 201
-    assert client.get("/api/auth/status").json() == {"needs_setup": False, "registration_open": False}
+    assert client.get("/api/auth/status").json() == {"needs_setup": False, "registration_open": False, "setup_token_required": False}
     assert client.post("/api/auth/register", json=owner(2)).status_code == 403
 
 
@@ -71,7 +71,7 @@ def test_failed_setup_releases_lock_and_can_be_retried(client, monkeypatch):
         patch.setattr(auth, "hash_password", fail_hash)
         with pytest.raises(RuntimeError, match="Simulated setup failure"):
             client.post("/api/auth/register", json=owner(1))
-    assert client.get("/api/auth/status").json() == {"needs_setup": True, "registration_open": True}
+    assert client.get("/api/auth/status").json() == {"needs_setup": True, "registration_open": True, "setup_token_required": False}
     assert client.post("/api/auth/register", json=owner(1)).status_code == 201
 
 

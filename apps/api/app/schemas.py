@@ -38,6 +38,7 @@ class AgencyOut(ORMModel):
     brand_color: str
     logo_url: str | None = None
     billing_enabled: bool = False
+    require_two_factor: bool = False
 
 
 class AgencyUpdate(BaseModel):
@@ -51,7 +52,14 @@ class UserOut(ORMModel):
     name: str
     email: EmailStr
     role: str
+    two_factor_enabled: bool = False
     agency: AgencyOut
+
+
+class TwoFactorLogin(BaseModel):
+    challenge: str = Field(min_length=10, max_length=2000)
+    # A 6-digit code from the authenticator app, or one recovery code.
+    code: str = Field(min_length=6, max_length=20)
 
 
 def check_timezone(value: str) -> str:

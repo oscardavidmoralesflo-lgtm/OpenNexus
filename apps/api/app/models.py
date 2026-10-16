@@ -47,6 +47,8 @@ class Agency(Base):
     stripe_customer_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     credit_balance: Mapped[float] = mapped_column(Numeric(14, 6), default=0, server_default="0")
+    # Every member must set up two-step verification before using the dashboard.
+    require_two_factor: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     users: Mapped[list["User"]] = relationship(back_populates="agency", cascade="all, delete-orphan")
@@ -71,10 +73,28 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(160))
     email: Mapped[str] = mapped_column(String(320), index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(30), default="admin")
+    # owner, admin, operator or viewer (see app.services.team_roles).
+    role: Mapped[str] = mapped_column(String(30), default="owner")
+    # Two-step verification (TOTP). The secret is encrypted like the AI keys;
+    # it is stored while being set up and only counts once ``totp_enabled``.
+    totp_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # The last time step accepted, so a code cannot be replayed.
+    totp_last_step: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # SHA-256 of the unused one-time recovery codes.
+    recovery_codes: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     agency: Mapped[Agency] = relationship(back_populates="users")
+
+    @property
+    def two_factor_enabled(self) -> bool:
+        return self.totp_enabled
+
+    @property
+    def recovery_codes_left(self) -> int:
+        return len(self.recovery_codes or [])
 
 
 class Client(Base):
@@ -1293,3 +1313,24 @@ class CreditTransaction(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     usage_record: Mapped["UsageRecord | None"] = relationship(lazy="noload")
+
+
+class Invitation(Base):
+    """An invitation to join the agency's team with a role. The link carries a
+    secret; only its SHA-256 is stored. It works once and expires."""
+
+    __tablename__ = "invitations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    email: Mapped[str] = mapped_column(String(320))
+    role: Mapped[str] = mapped_column(String(30))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    invited_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    agency: Mapped[Agency] = relationship()
+    invited_by: Mapped["User | None"] = relationship()

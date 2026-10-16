@@ -26,9 +26,30 @@ def create_access_token(user_id: str) -> str:
 def decode_access_token(token: str) -> str | None:
     try:
         payload = jwt.decode(token, get_settings().secret_key, algorithms=["HS256"])
-        return payload.get("sub")
     except jwt.PyJWTError:
         return None
+    # Dashboard sessions carry no type; a portal session or a two-step
+    # challenge is never accepted as one.
+    if payload.get("type") is not None:
+        return None
+    return payload.get("sub")
+
+
+TWO_FACTOR_CHALLENGE_MINUTES = 5
+
+
+def create_two_factor_challenge(user_id: str) -> str:
+    """Proof that the password was right, valid only to send the second step."""
+    expires = datetime.now(timezone.utc) + timedelta(minutes=TWO_FACTOR_CHALLENGE_MINUTES)
+    return jwt.encode({"sub": user_id, "type": "2fa", "exp": expires}, get_settings().secret_key, algorithm="HS256")
+
+
+def decode_two_factor_challenge(token: str) -> str | None:
+    try:
+        payload = jwt.decode(token, get_settings().secret_key, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+    return payload.get("sub") if payload.get("type") == "2fa" else None
 
 
 def create_portal_token(client_id: str, portal_slug: str, portal_user_id: str | None = None) -> str:

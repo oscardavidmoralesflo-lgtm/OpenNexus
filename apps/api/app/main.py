@@ -2,13 +2,15 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import new_session
 from .services.conversation_state import resolve_idle_ai_conversations
+from .services.team_roles import enforce as enforce_role_policy
 from .routers import (
+    account,
     agency,
     agent_tools,
     agents,
@@ -34,6 +36,7 @@ from .routers import (
     webchat,
     social,
     social_webhook,
+    team,
 )
 
 
@@ -94,6 +97,8 @@ app = FastAPI(
     description="API to manage agencies, clients and AI agents.",
     version="0.3.0",
     lifespan=lifespan,
+    # Roles and the agency's two-step policy apply to every dashboard route.
+    dependencies=[Depends(enforce_role_policy)],
 )
 app.add_middleware(
     CORSMiddleware,
@@ -113,6 +118,9 @@ def health():
 
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(team.public_router, prefix="/api")
+app.include_router(team.router, prefix="/api")
+app.include_router(account.router, prefix="/api")
 app.include_router(agency.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(industries.router, prefix="/api")

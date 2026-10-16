@@ -9,6 +9,7 @@ import { Alert } from "@/components/ui";
 import { PasswordInput } from "@/components/password-input";
 
 type AuthStatus = { needs_setup: boolean; registration_open: boolean; setup_token_required?: boolean };
+type LoginResult = { two_factor_required?: boolean; challenge?: string };
 
 export default function LoginPage() {
   const t = useT();
@@ -18,6 +19,8 @@ export default function LoginPage() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [statusFailed, setStatusFailed] = useState(false);
   const [statusAttempt, setStatusAttempt] = useState(0);
+  // Set once the password was right and the account asks for a second step.
+  const [challenge, setChallenge] = useState<string | null>(null);
   const mode = authStatus?.needs_setup ? "register" : "login";
 
   useEffect(() => {
@@ -37,7 +40,12 @@ export default function LoginPage() {
     setError("");
     const data = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      await api(mode === "login" ? "/auth/login" : "/auth/register", { method: "POST", body: JSON.stringify(data) });
+      if (challenge) {
+        await api("/auth/login/2fa", { method: "POST", body: JSON.stringify({ challenge, code: data.code }) });
+      } else {
+        const result = await api<LoginResult>(mode === "login" ? "/auth/login" : "/auth/register", { method: "POST", body: JSON.stringify(data) });
+        if (result?.two_factor_required && result.challenge) { setChallenge(result.challenge); return; }
+      }
       router.push("/");
       router.refresh();
     } catch (err) {
@@ -80,7 +88,15 @@ export default function LoginPage() {
                 setStatusAttempt((attempt) => attempt + 1);
               }}>{t("auth.retryStatus")}</button>
             </> : <p role="status"><LoaderCircle className="spin" size={17} /> {t("common.loading")}</p>)}
-            {authStatus && <form onSubmit={submit} className="access-form">
+            {authStatus && challenge && <form onSubmit={submit} className="access-form" key="second-step">
+              <p>{t("auth.twoFactorPrompt")}</p>
+              <label>{t("auth.twoFactorCode")}<input name="code" required autoFocus autoComplete="one-time-code" inputMode="text" minLength={6} maxLength={20} placeholder="123456" /></label>
+              <small className="field-help">{t("auth.twoFactorRecoveryHint")}</small>
+              {error && <Alert>{error}</Alert>}
+              <button className="button primary full" disabled={busy}>{busy && <LoaderCircle className="spin" size={17} />}{t("auth.twoFactorSubmit")}</button>
+              <button className="button ghost full" type="button" onClick={() => { setChallenge(null); setError(""); }}>{t("auth.twoFactorBack")}</button>
+            </form>}
+            {authStatus && !challenge && <form onSubmit={submit} className="access-form">
               {mode === "register" && <>
                 <label>{t("auth.agencyName")}<input name="agency_name" required minLength={2} placeholder={t("auth.agencyNamePlaceholder")} /></label>
                 <label>{t("auth.yourName")}<input name="name" required minLength={2} placeholder={t("auth.yourNamePlaceholder")} /></label>

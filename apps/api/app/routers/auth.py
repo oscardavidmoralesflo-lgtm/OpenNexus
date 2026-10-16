@@ -1,4 +1,5 @@
 import hmac
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select, text
@@ -9,8 +10,8 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import Agency, User
 from ..ratelimit import login_rate_limit
-from ..schemas import LoginRequest, RegisterRequest, UserOut
-from ..security import create_access_token, hash_password, verify_password
+from ..schemas import LoginRequest, RegisterRequest, TwoFactorLogin, UserOut
+from ..security import create_access_token, create_two_factor_challenge, decode_two_factor_challenge, hash_password, verify_password
 from ..slugs import unique_slug
 
 
@@ -75,6 +76,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
         name=payload.name.strip(),
         email=email,
         password_hash=hash_password(payload.password),
+        role="owner",
     )
     db.add(user)
     db.commit()
@@ -83,13 +85,38 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
     return user
 
 
-@router.post("/login", response_model=UserOut, dependencies=[Depends(login_rate_limit)])
+@router.post("/login", response_model=None, dependencies=[Depends(login_rate_limit)])
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+    if user.totp_enabled:
+        # The password was right; the session waits for the second step.
+        return {"two_factor_required": True, "challenge": create_two_factor_challenge(str(user.id))}
+    return _signed_in(db, response, user)
+
+
+def _signed_in(db: Session, response: Response, user: User) -> UserOut:
+    from ..models import now_utc
+
+    user.last_login_at = now_utc()
+    db.commit()
+    db.refresh(user)
     _set_session_cookie(response, user)
-    return user
+    return UserOut.model_validate(user)
+
+
+@router.post("/login/2fa", response_model=UserOut, dependencies=[Depends(login_rate_limit)])
+def login_second_step(payload: TwoFactorLogin, response: Response, db: Session = Depends(get_db)):
+    from ..services.account_security import check_second_factor
+
+    user_id = decode_two_factor_challenge(payload.challenge)
+    user = db.get(User, uuid.UUID(user_id)) if user_id else None
+    if user is None or not user.totp_enabled:
+        raise HTTPException(status_code=401, detail="The sign-in expired. Enter your password again.")
+    if not check_second_factor(db, user, payload.code):
+        raise HTTPException(status_code=401, detail="That code is not valid")
+    return _signed_in(db, response, user)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
