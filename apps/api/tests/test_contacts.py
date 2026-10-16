@@ -1,0 +1,445 @@
+import uuid
+from unittest.mock import AsyncMock
+
+from fastapi.testclient import TestClient
+
+from app.config import get_settings
+from app.services import ai as ai_service
+from app.services import whatsapp_inbound as whatsapp_inbound_service
+
+
+def _portal(client: TestClient, name: str = "Contacts Co"):
+    customer = client.post(
+        "/api/clients",
+        json={"name": name, "is_active": True},
+    ).json()
+    client.post(
+        f"/api/clients/{customer['id']}/portal-users",
+        json={"name": "Ana", "email": f"ana@{customer['portal_slug']}.com", "password": "secure-portal"},
+    )
+    client.patch(f"/api/clients/{customer['id']}/portal", json={"portal_enabled": True})
+    client.post(f"/api/portal/{customer['portal_slug']}/login", json={"email": f"ana@{customer['portal_slug']}.com", "password": "secure-portal"})
+    return customer
+
+
+def test_portal_manages_contacts(authenticated_client: TestClient):
+    client = authenticated_client
+    customer = _portal(client)
+    base = f"/api/portal/{customer['portal_slug']}/contacts"
+
+    created = client.post(base, json={"name": "Sam Pérez", "phone": "+57 300 111 2233", "email": "sam@example.com", "notes": "Prefers mornings"})
+    assert created.status_code == 201, created.text
+    contact = created.json()
+    assert contact["phone"] == "573001112233"
+    assert contact["conversation_count"] == 0
+
+    assert client.post(base, json={"name": "Dup", "phone": "573001112233"}).status_code == 409
+    assert client.post(base, json={"name": "Short", "phone": "12345"}).status_code == 422
+
+    assert [row["id"] for row in client.get(f"{base}?search=sam").json()] == [contact["id"]]
+    assert [row["id"] for row in client.get(f"{base}?search=3001112").json()] == [contact["id"]]
+    assert client.get(f"{base}?search=nobody").json() == []
+
+    updated = client.patch(f"{base}/{contact['id']}", json={"name": "Samuel Pérez", "notes": ""})
+    assert updated.status_code == 200 and updated.json()["name"] == "Samuel Pérez" and updated.json()["notes"] == ""
+
+    assert client.delete(f"{base}/{contact['id']}").status_code == 204
+    assert client.get(f"{base}/{contact['id']}").status_code == 404
+
+
+def test_inbound_creates_the_contact_and_a_new_case_after_resolution(authenticated_client: TestClient, monkeypatch):
+    client = authenticated_client
+    customer = _portal(client, "Cases Co")
+    slug = customer["portal_slug"]
+    client.put("/api/providers/openrouter", json={"api_key": "secret"})
+    agent = client.post(
+        "/api/agents",
+        json={"client_id": customer["id"], "provider": "openrouter", "model": "gpt-4.1-mini", "name": "Beto", "instructions": "", "personality": "", "is_active": True},
+    ).json()
+    channel = client.put(f"/api/whatsapp/channels/{customer['id']}", json={"agent_id": agent["id"]}).json()
+    headers = {"X-Bridge-Token": get_settings().whatsapp_bridge_token}
+    completion = AsyncMock(return_value=ai_service.Completion(text="Hello!", input_tokens=1, output_tokens=1))
+    monkeypatch.setattr(whatsapp_inbound_service, "run_completion", completion)
+
+    def inbound(message_id: str, text: str, name: str | None = "Sam"):
+        return client.post(
+            f"/api/internal/whatsapp/channels/{channel['id']}/inbound",
+            json={"external_message_id": message_id, "remote_jid": "573001112233@s.whatsapp.net", "sender_name": name, "text": text},
+            headers=headers,
+        ).json()
+
+    first_id = inbound("m1", "Hola, quiero reservar")["conversation_id"]
+    contacts = client.get(f"/api/portal/{slug}/contacts").json()
+    assert len(contacts) == 1 and contacts[0]["phone"] == "573001112233" and contacts[0]["name"] == "Sam"
+    contact_id = contacts[0]["id"]
+    assert client.get(f"/api/conversations/{first_id}").json()["contact_id"] == contact_id
+
+    # While the case is open, more messages join it.
+    assert inbound("m2", "para mañana")["conversation_id"] == first_id
+
+    client.patch(f"/api/conversations/{first_id}/status", json={"status": "resolved"})
+    second_id = inbound("m3", "Hola de nuevo")["conversation_id"]
+    assert second_id != first_id
+    assert client.get(f"/api/conversations/{first_id}").json()["status"] == "resolved"
+    assert client.get(f"/api/conversations/{second_id}").json()["contact_id"] == contact_id
+
+    history = client.get(f"/api/portal/{slug}/contacts/{contact_id}/conversations").json()
+    assert [row["id"] for row in history] == [second_id, first_id]
+    assert [row["status"] for row in history] == ["open", "resolved"]
+    summary = client.get(f"/api/portal/{slug}/contacts/{contact_id}").json()
+    assert summary["conversation_count"] == 2 and summary["open_count"] == 1
+
+    # The model hears about the previous case when a new one opens.
+    sent = completion.call_args.args[4]
+    assert "CONTEXTO DEL CONTACTO" in sent[0]["content"]
+    assert "quiero reservar" in sent[0]["content"]
+
+    # Renaming the contact renames its conversations everywhere.
+    client.patch(f"/api/portal/{slug}/contacts/{contact_id}", json={"name": "Samuel"})
+    titles = {row["title"] for row in client.get(f"/api/portal/{slug}/contacts/{contact_id}/conversations").json()}
+    assert titles == {"Samuel"}
+
+    # Deleting the contact deletes their conversations with them.
+    assert client.delete(f"/api/portal/{slug}/contacts/{contact_id}").status_code == 204
+    assert client.get(f"/api/conversations/{first_id}").status_code == 404
+    assert client.get(f"/api/conversations/{second_id}").status_code == 404
+    assert client.get(f"/api/portal/{slug}/conversations").json() == []
+
+
+def test_merge_contacts_moves_conversations_and_fills_blanks(authenticated_client: TestClient, monkeypatch):
+    client = authenticated_client
+    customer = _portal(client, "Merge Co")
+    slug = customer["portal_slug"]
+    client.put("/api/providers/openrouter", json={"api_key": "secret"})
+    agent = client.post(
+        "/api/agents",
+        json={"client_id": customer["id"], "provider": "openrouter", "model": "gpt-4.1-mini", "name": "Beto", "instructions": "", "personality": "", "is_active": True},
+    ).json()
+    channel = client.put(f"/api/whatsapp/channels/{customer['id']}", json={"agent_id": agent["id"]}).json()
+    headers = {"X-Bridge-Token": get_settings().whatsapp_bridge_token}
+    monkeypatch.setattr(whatsapp_inbound_service, "run_completion", AsyncMock(return_value=ai_service.Completion(text="Hola!", input_tokens=1, output_tokens=1)))
+
+    # The person wrote in by WhatsApp (that contact has the phone), and someone
+    # also created a manual profile for them with the email.
+    conversation_id = client.post(
+        f"/api/internal/whatsapp/channels/{channel['id']}/inbound",
+        json={"external_message_id": "m1", "remote_jid": "573001112233@s.whatsapp.net", "sender_name": "Sam", "text": "Hola"},
+        headers=headers,
+    ).json()["conversation_id"]
+    base = f"/api/portal/{slug}/contacts"
+    whatsapp_contact = client.get(base).json()[0]
+    manual = client.post(base, json={"name": "Samuel Pérez", "phone": "+57 311 999 8877", "email": "sam@example.com", "notes": "VIP"}).json()
+
+    # Merging into yourself or into another client's contact is refused.
+    assert client.post(f"{base}/{manual['id']}/merge", json={"primary_contact_id": manual["id"]}).status_code == 409
+    assert client.post(f"{base}/{manual['id']}/merge", json={"primary_contact_id": str(uuid.uuid4())}).status_code == 404
+
+    # The manual profile folds into the WhatsApp contact, which stays primary.
+    merged = client.post(f"{base}/{manual['id']}/merge", json={"primary_contact_id": whatsapp_contact["id"]})
+    assert merged.status_code == 200, merged.text
+    primary = merged.json()
+    assert primary["id"] == whatsapp_contact["id"]
+    assert primary["phone"] == "573001112233"
+    assert primary["email"] == "sam@example.com"
+    assert "VIP" in primary["notes"]
+
+    assert client.get(f"{base}/{manual['id']}").status_code == 404
+    assert client.get(f"/api/conversations/{conversation_id}").json()["contact_id"] == primary["id"]
+    assert len(client.get(base).json()) == 1
+
+
+def test_portal_imports_and_exports_contacts(authenticated_client: TestClient):
+    client = authenticated_client
+    customer = _portal(client, "Import Co")
+    base = f"/api/portal/{customer['portal_slug']}/contacts"
+
+    # A contact that already exists with no name: the import fills it in.
+    assert client.post(base, json={"name": "", "phone": "+57 300 555 0000"}).status_code == 201
+
+    template = client.get(f"{base}/import-template")
+    assert template.status_code == 200 and template.headers["content-type"].startswith("text/csv")
+    assert template.text.lstrip("\ufeff").splitlines()[:2] == ["name,phone,email,notes", "Ana Gómez,573001234567,ana@example.com,Prefers mornings"]
+
+    csv_text = "\n".join([
+        "Nombre;Teléfono;Correo;Notas",
+        "Ana Gómez;+57 300 123 4567;ana@example.com;Prefers mornings",
+        "Sin teléfono;;x@y.com;",
+        "Corto;12345;;",
+        "Mal correo;+57 300 999 8888;not-an-email;",
+        "Repetido;+57 300 123 4567;;",
+        "Con letras;573001112233 ext 4;;",
+        "Muy largo;5730011122334455667;;",
+        "Existente;+57 300 555 0000;exist@example.com;",
+        "",
+    ])
+    imported = client.post(f"{base}/import", files={"file": ("contacts.csv", csv_text.encode("utf-8"), "text/csv")})
+    assert imported.status_code == 200, imported.text
+    result = imported.json()
+    assert result["created"] == 1 and result["updated"] == 1 and result["unchanged"] == 0
+    assert [(e["row"], e["reason"]) for e in result["errors"]] == [
+        (3, "phone_missing"), (4, "phone_invalid"), (5, "email_invalid"), (6, "duplicate_in_file"),
+        (7, "phone_invalid"), (8, "phone_invalid"),
+    ]
+
+    listed = client.get(base)
+    assert listed.headers["x-total-count"] == "2"
+    assert client.get(f"{base}?search=ana").headers["x-total-count"] == "1"
+    rows = {row["phone"]: row for row in listed.json()}
+    assert rows["573001234567"]["name"] == "Ana Gómez" and rows["573001234567"]["email"] == "ana@example.com"
+    assert rows["573005550000"]["name"] == "Existente" and rows["573005550000"]["email"] == "exist@example.com"
+
+    exported = client.get(f"{base}/export")
+    assert exported.status_code == 200 and "attachment" in exported.headers["content-disposition"]
+    lines = exported.text.lstrip("\ufeff").splitlines()
+    assert lines[0] == "name,phone,email,notes,tags,blocked,conversations,created_at"
+    assert any(line.startswith("Ana Gómez,+573001234567,ana@example.com,Prefers mornings,,no,0,") for line in lines)
+
+    missing_phone = client.post(f"{base}/import", files={"file": ("bad.csv", b"name,email\nAna,a@b.com\n", "text/csv")})
+    assert missing_phone.status_code == 422
+
+
+def test_portal_contact_tags(authenticated_client: TestClient):
+    client = authenticated_client
+    customer = _portal(client, "Tags Co")
+    slug = customer["portal_slug"]
+    base = f"/api/portal/{slug}"
+
+    vip = client.post(f"{base}/tags", json={"name": "VIP"})
+    assert vip.status_code == 201, vip.text
+    vip = vip.json()
+    assert vip["color"] == "#6b7280" and vip["contact_count"] == 0
+    priority = client.post(f"{base}/tags", json={"name": "Priority", "color": "#EF4444"}).json()
+    assert priority["color"] == "#ef4444"
+    assert client.post(f"{base}/tags", json={"name": "vip"}).status_code == 409
+    assert client.post(f"{base}/tags", json={"name": "Odd", "color": "neon"}).status_code == 422
+
+    ana = client.post(f"{base}/contacts", json={"name": "Ana", "phone": "573001112233"}).json()
+    luis = client.post(f"{base}/contacts", json={"name": "Luis", "phone": "573001112244"}).json()
+    assert ana["tags"] == []
+
+    tagged = client.put(f"{base}/contacts/{ana['id']}/tags", json={"tag_ids": [vip["id"], priority["id"], str(uuid.uuid4())]})
+    assert tagged.status_code == 200, tagged.text
+    assert sorted(t["name"] for t in tagged.json()["tags"]) == ["Priority", "VIP"]
+    client.put(f"{base}/contacts/{luis['id']}/tags", json={"tag_ids": [priority["id"]]})
+
+    counts = {t["name"]: t["contact_count"] for t in client.get(f"{base}/tags").json()}
+    assert counts == {"Priority": 2, "VIP": 1}
+    assert [c["id"] for c in client.get(f"{base}/contacts?tag={vip['id']}").json()] == [ana["id"]]
+    assert client.get(f"{base}/contacts?tag={vip['id']}").headers["x-total-count"] == "1"
+
+    renamed = client.patch(f"{base}/tags/{vip['id']}", json={"name": "Very important", "color": "#8b5cf6"})
+    assert renamed.status_code == 200 and renamed.json()["color"] == "#8b5cf6"
+    assert client.patch(f"{base}/tags/{vip['id']}", json={"name": "priority"}).status_code == 409
+
+    exported = client.get(f"{base}/contacts/export").text.lstrip("\ufeff").splitlines()
+    assert exported[0] == "name,phone,email,notes,tags,blocked,conversations,created_at"
+    assert any(line.startswith("Ana,+573001112233,,,\"Priority, Very important\",") for line in exported), exported
+
+    # Merging folds the tags of the merged contact into the survivor.
+    merged = client.post(f"{base}/contacts/{luis['id']}/merge", json={"primary_contact_id": ana["id"]})
+    assert merged.status_code == 200, merged.text
+    assert sorted(t["name"] for t in merged.json()["tags"]) == ["Priority", "Very important"]
+
+    assert client.delete(f"{base}/tags/{priority['id']}").status_code == 204
+    assert [t["name"] for t in client.get(f"{base}/contacts/{ana['id']}").json()["tags"]] == ["Very important"]
+
+
+def test_tagged_contact_routes_new_conversations_to_a_team(authenticated_client: TestClient, monkeypatch):
+    client = authenticated_client
+    customer = _portal(client, "Routing Co")
+    slug = customer["portal_slug"]
+    base = f"/api/portal/{slug}"
+    client.post(f"/api/clients/{customer['id']}/portal-users", json={"name": "Beto", "email": f"beto@{slug}.com", "password": "secure-portal"})
+    members = client.get(f"{base}/members").json()
+    team = client.post(f"{base}/teams", json={"name": "Ventas", "member_ids": [m["id"] for m in members]}).json()
+
+    client.put("/api/providers/openrouter", json={"api_key": "secret"})
+    agent = client.post("/api/agents", json={"client_id": customer["id"], "provider": "openrouter", "model": "gpt-4.1-mini", "name": "Beto AI", "instructions": "", "personality": "", "is_active": True}).json()
+    channel = client.put(f"/api/whatsapp/channels/{customer['id']}", json={"agent_id": agent["id"]}).json()
+    headers = {"X-Bridge-Token": get_settings().whatsapp_bridge_token}
+    completion = AsyncMock(return_value=ai_service.Completion(text="Hello!", input_tokens=1, output_tokens=1))
+    monkeypatch.setattr(whatsapp_inbound_service, "run_completion", completion)
+
+    vip = client.post(f"{base}/tags", json={"name": "VIP"}).json()
+    # The portal cannot route a tag: the field is ignored there.
+    ignored = client.patch(f"{base}/tags/{vip['id']}", json={"route_team_id": team["id"]})
+    assert ignored.status_code == 200 and ignored.json()["route_team_id"] is None
+    agency_tags = f"/api/clients/{customer['id']}/contact-tags"
+    routed = client.patch(f"{agency_tags}/{vip['id']}", json={"route_team_id": team["id"]})
+    assert routed.status_code == 200 and routed.json()["route_team_name"] == "Ventas"
+    assert client.patch(f"{agency_tags}/{vip['id']}", json={"route_team_id": str(uuid.uuid4())}).status_code == 404
+    assert client.get(f"{base}/tags").json()[0]["route_team_name"] == "Ventas"
+    contact = client.post(f"{base}/contacts", json={"name": "Vera", "phone": "573001112233"}).json()
+    client.put(f"{base}/contacts/{contact['id']}/tags", json={"tag_ids": [vip["id"]]})
+
+    def inbound(message_id: str, jid: str, name: str):
+        return client.post(
+            f"/api/internal/whatsapp/channels/{channel['id']}/inbound",
+            json={"external_message_id": message_id, "remote_jid": jid, "sender_name": name, "text": "Hola"},
+            headers=headers,
+        ).json()
+
+    tagged = inbound("m1", "573001112233@s.whatsapp.net", "Vera")
+    assert tagged["mode"] == "human"
+    conversation = client.get(f"/api/conversations/{tagged['conversation_id']}").json()
+    assert conversation["mode"] == "human" and conversation["team_id"] == team["id"]
+    assert conversation["assignee_id"] in {m["id"] for m in members}
+    assert completion.await_count == 0
+    thread = client.get(f"{base}/conversations/{tagged['conversation_id']}").json()
+    events = [m["activity"]["event"] for m in thread["messages"] if m.get("activity")]
+    assert "routed_by_tag" in events
+
+    assert client.get(f"{base}/conversations").headers["x-total-count"] == "1"
+
+    # An untagged contact still goes to the AI.
+    plain = inbound("m2", "573009998877@s.whatsapp.net", "Pepe")
+    assert plain["mode"] == "ai"
+
+    # A tag can also route straight to one person.
+    person_id = members[0]["id"]
+    to_person = client.patch(f"{agency_tags}/{vip['id']}", json={"route_assignee_id": person_id})
+    assert to_person.status_code == 200 and to_person.json()["route_team_id"] is None and to_person.json()["route_assignee_id"] == person_id
+    client.patch(f"/api/conversations/{tagged['conversation_id']}/status", json={"status": "resolved"})
+    again = inbound("m3", "573001112233@s.whatsapp.net", "Vera")
+    direct = client.get(f"/api/conversations/{again['conversation_id']}").json()
+    assert direct["mode"] == "human" and direct["assignee_id"] == person_id and direct["team_id"] is None
+    assert client.patch(f"{agency_tags}/{vip['id']}", json={"route_assignee_id": str(uuid.uuid4())}).status_code == 404
+
+    # Clearing the routing (agency side) leaves the tag in place.
+    cleared = client.patch(f"{agency_tags}/{vip['id']}", json={"route_team_id": None, "route_assignee_id": None}).json()
+    assert cleared["route_team_id"] is None and cleared["route_assignee_id"] is None and cleared["name"] == "VIP"
+    listed = client.get(agency_tags).json()
+    assert [(row["name"], row["route_team_id"]) for row in listed] == [("VIP", None)]
+    # The agency renames too, since it manages the catalog from the client page.
+    assert client.patch(f"{agency_tags}/{vip['id']}", json={"name": "x"}).json()["name"] == "x"
+    assert client.patch(f"{agency_tags}/{vip['id']}", json={"name": "VIP"}).status_code == 200
+
+    # The contact's history pages with a total, and can be limited to a date range.
+    history = client.get(f"{base}/contacts/{contact['id']}/conversations?limit=1")
+    assert history.headers["x-total-count"] == "2" and len(history.json()) == 1
+    assert client.get(f"{base}/contacts/{contact['id']}/conversations?until=2000-01-01").headers["x-total-count"] == "0"
+    assert client.get(f"{base}/contacts/{contact['id']}/conversations?since=2000-01-01").headers["x-total-count"] == "2"
+
+
+def test_the_agency_manages_tags_from_the_client_page(authenticated_client: TestClient):
+    client = authenticated_client
+    customer = _portal(client, "Agency Tags Co")
+    slug = customer["portal_slug"]
+    base = f"/api/clients/{customer['id']}/contact-tags"
+
+    created = client.post(base, json={"name": "Mayorista", "color": "#0EA5E9"})
+    assert created.status_code == 201, created.text
+    tag = created.json()
+    assert tag["color"] == "#0ea5e9" and tag["contact_count"] == 0
+    assert client.post(base, json={"name": "mayorista"}).status_code == 409
+    assert client.post(base, json={"name": "Odd", "color": "sky"}).status_code == 422
+
+    # The portal sees it, and a rename from the agency shows there too.
+    assert [row["name"] for row in client.get(f"/api/portal/{slug}/tags").json()] == ["Mayorista"]
+    renamed = client.patch(f"{base}/{tag['id']}", json={"name": "Distribuidor", "color": "#22c55e"})
+    assert renamed.status_code == 200 and renamed.json()["name"] == "Distribuidor" and renamed.json()["color"] == "#22c55e"
+    assert client.get(f"/api/portal/{slug}/tags").json()[0]["name"] == "Distribuidor"
+    assert client.patch(f"{base}/{tag['id']}", json={}).status_code == 422
+
+    # Another agency's client is out of reach.
+    other = client.post("/api/clients", json={"name": "Elsewhere"}).json()
+    assert client.patch(f"/api/clients/{other['id']}/contact-tags/{tag['id']}", json={"name": "Hijack"}).status_code == 404
+
+    assert client.delete(f"{base}/{tag['id']}").status_code == 204
+    assert client.get(f"/api/portal/{slug}/tags").json() == []
+
+
+def test_the_agent_is_told_who_it_is_talking_to(authenticated_client: TestClient, monkeypatch):
+    """The system prompt carries the contact's phone, e-mail and tags, so a
+    form or an e-mail the agent fills never says "not specified" for what the
+    conversation already knows. What is missing is simply absent."""
+    client = authenticated_client
+    customer = _portal(client, "Context Co")
+    slug = customer["portal_slug"]
+    client.put("/api/providers/openrouter", json={"api_key": "secret"})
+    agent = client.post(
+        "/api/agents",
+        json={"client_id": customer["id"], "provider": "openrouter", "model": "gpt-4.1-mini", "name": "Beto", "instructions": "Capture leads.", "is_active": True},
+    ).json()
+    channel = client.put(f"/api/whatsapp/channels/{customer['id']}", json={"agent_id": agent["id"]}).json()
+    headers = {"X-Bridge-Token": get_settings().whatsapp_bridge_token}
+    completion = AsyncMock(return_value=ai_service.Completion(text="Hello!", input_tokens=1, output_tokens=1))
+    monkeypatch.setattr(whatsapp_inbound_service, "run_completion", completion)
+
+    def inbound(message_id: str, text: str):
+        return client.post(
+            f"/api/internal/whatsapp/channels/{channel['id']}/inbound",
+            json={"external_message_id": message_id, "remote_jid": "573001112233@s.whatsapp.net", "sender_name": "Juan Luis", "text": text},
+            headers=headers,
+        ).json()
+
+    inbound("m1", "Hola")
+    prompt = completion.await_args.args[4][0]["content"]
+    assert "## Contacto" in prompt
+    assert "**Nombre:** Juan Luis" in prompt and "**Teléfono:** 573001112233" in prompt and "**Canal:** WhatsApp" in prompt
+    assert "Correo" not in prompt
+    assert "No se los pidas al cliente si ya están aquí" in prompt
+
+    # Once the business fills in the e-mail and a tag, the next reply knows them.
+    contact = client.get(f"/api/portal/{slug}/contacts").json()[0]
+    client.patch(f"/api/portal/{slug}/contacts/{contact['id']}", json={"email": "juan@example.com"})
+    tag = client.post(f"/api/portal/{slug}/tags", json={"name": "Inversionista"}).json()
+    client.put(f"/api/portal/{slug}/contacts/{contact['id']}/tags", json={"tag_ids": [tag["id"]]})
+    inbound("m2", "Sigo aquí")
+    prompt = completion.await_args.args[4][0]["content"]
+    assert "**Correo:** juan@example.com" in prompt and "**Etiquetas:** Inversionista" in prompt
+
+    # The playground has no contact and no block.
+    assert "## Contacto" not in client.get(f"/api/agents/{agent['id']}/prompt").json()["prompt"]
+
+
+def test_renamed_contact_wins_over_the_profile_name(authenticated_client: TestClient, monkeypatch):
+    """The inbox shows the name the business gave the contact, not the profile
+    name WhatsApp keeps reporting, on the current case and on the next one."""
+    client = authenticated_client
+    customer = _portal(client, "Rename Co")
+    slug = customer["portal_slug"]
+    client.put("/api/providers/openrouter", json={"api_key": "secret"})
+    agent = client.post(
+        "/api/agents",
+        json={"client_id": customer["id"], "provider": "openrouter", "model": "gpt-4.1-mini", "name": "Beto", "instructions": "", "personality": "", "is_active": True},
+    ).json()
+    channel = client.put(f"/api/whatsapp/channels/{customer['id']}", json={"agent_id": agent["id"]}).json()
+    headers = {"X-Bridge-Token": get_settings().whatsapp_bridge_token}
+    monkeypatch.setattr(whatsapp_inbound_service, "run_completion", AsyncMock(return_value=ai_service.Completion(text="Hello!", input_tokens=1, output_tokens=1)))
+
+    def inbound(message_id: str, text: str):
+        return client.post(
+            f"/api/internal/whatsapp/channels/{channel['id']}/inbound",
+            json={"external_message_id": message_id, "remote_jid": "573001112233@s.whatsapp.net", "sender_name": "fulanito", "text": text},
+            headers=headers,
+        ).json()
+
+    first = inbound("r1", "hola")["conversation_id"]
+    contact = client.get(f"/api/portal/{slug}/contacts").json()[0]
+    assert client.get(f"/api/conversations/{first}").json()["contact_name"] == "fulanito"
+
+    client.patch(f"/api/portal/{slug}/contacts/{contact['id']}", json={"name": "Víctor Perea"})
+    assert client.get(f"/api/conversations/{first}").json()["contact_name"] == "Víctor Perea"
+    # The profile name keeps arriving with every message and does not undo the rename.
+    inbound("r2", "sigo aquí")
+    assert client.get(f"/api/conversations/{first}").json()["contact_name"] == "Víctor Perea"
+    # A new case with the same person opens under the record's name too.
+    client.patch(f"/api/conversations/{first}/status", json={"status": "resolved"})
+    second = inbound("r3", "hola otra vez")["conversation_id"]
+    assert second != first
+    assert client.get(f"/api/conversations/{second}").json()["contact_name"] == "Víctor Perea"
+
+
+def test_contacts_list_newest_first_and_editing_does_not_reorder(authenticated_client: TestClient):
+    client = authenticated_client
+    customer = _portal(client, "Order Co")
+    base = f"/api/portal/{customer['portal_slug']}/contacts"
+    first = client.post(base, json={"name": "First", "phone": "573001110001"}).json()
+    second = client.post(base, json={"name": "Second", "phone": "573001110002"}).json()
+    assert [row["name"] for row in client.get(base).json()] == ["Second", "First"]
+
+    assert client.patch(f"{base}/{first['id']}", json={"notes": "edited later"}).status_code == 200
+    listed = client.get(base).json()
+    assert [row["name"] for row in listed] == ["Second", "First"]
+    assert listed[1]["id"] == first["id"] and listed[0]["id"] == second["id"]

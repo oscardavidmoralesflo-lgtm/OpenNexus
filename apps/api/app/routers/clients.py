@@ -1,0 +1,628 @@
+import uuid
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
+
+from ..database import get_db
+from ..deps import get_current_user
+from .. import industries
+from ..models import Agent, AgentCaptureField, Client, Contact, ContactField, Conversation, PortalUser, PushDevice, User, new_domain_token, Team
+from ..portal_permissions import DEFAULT_ROLE
+from ..schemas import (
+    ClientDeletionPreview,
+    ClientCreate,
+    ClientDomainOut,
+    ClientDomainSet,
+    ClientOut,
+    ClientPortalUpdate,
+    ClientUpdate,
+    PortalMemberOut,
+    PortalUserCreate,
+    PortalUserOut,
+    PortalUserUpdate,
+    ContactFieldIn,
+    ContactFieldOut,
+    ContactFieldUpdate,
+    ContactTagCreate,
+    ContactTagOut,
+    ContactTagUpdate,
+    TeamOut,
+    TeamUpsert,
+    TemplateCreate,
+    TemplateOut,
+    TemplateSampleOut,
+)
+from ..security import hash_password
+from ..services.attachments import logo_response
+from ..services.capture import BUILTIN_FIELDS, contacts_holding, field_definitions, strip_attribute
+from ..services.tags import create_tag, delete_tag, get_tag, list_tags, rename_tag, tag_count, tag_out
+from ..services.teams import create_team, delete_team, list_teams, members_out, team_out, update_team
+from ..services.whatsapp import bridge_command
+from ..services.whatsapp_templates import (
+    create_template,
+    delete_template,
+    list_templates,
+    read_sample,
+    template_credentials,
+    upload_sample,
+    validate_template_name,
+)
+from ..services import dns as dns_service
+from ..slugs import slugify, unique_slug
+
+
+router = APIRouter(prefix="/clients", tags=["Clients"])
+MAX_LOGO_BYTES = 2 * 1024 * 1024
+ALLOWED_LOGO_TYPES = {"image/png", "image/jpeg", "image/webp", "image/svg+xml"}
+
+
+def _domain_out(client: Client) -> ClientDomainOut:
+    if not client.portal_domain:
+        return ClientDomainOut(domain=None, verified=False, txt_host=None, txt_value=None)
+    return ClientDomainOut(
+        domain=client.portal_domain,
+        verified=client.portal_domain_verified,
+        txt_host=dns_service.challenge_host(client.portal_domain),
+        txt_value=client.portal_domain_token,
+    )
+
+
+def _check_industry(industry: str, business_type: str) -> None:
+    error = industries.validate(industry, business_type)
+    if error:
+        raise HTTPException(status_code=422, detail=error)
+
+
+def _client(db: Session, user: User, client_id: uuid.UUID) -> Client:
+    client = db.scalar(
+        select(Client)
+        .options(selectinload(Client.agents))
+        .where(Client.id == client_id, Client.agency_id == user.agency_id)
+    )
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return client
+
+
+@router.get("", response_model=list[ClientOut])
+def list_clients(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return db.scalars(
+        select(Client)
+        .options(selectinload(Client.agents))
+        .where(Client.agency_id == user.agency_id)
+        .order_by(Client.created_at.desc())
+    ).all()
+
+
+@router.post("", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
+def create_client(payload: ClientCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    _check_industry(payload.industry, payload.business_type)
+    client = Client(
+        agency_id=user.agency_id,
+        portal_slug=unique_slug(db, Client, "portal_slug", payload.name),
+        **payload.model_dump(),
+    )
+    db.add(client)
+    db.commit()
+    return _client(db, user, client.id)
+
+
+@router.get("/{client_id}", response_model=ClientOut)
+def get_client(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return _client(db, user, client_id)
+
+
+@router.patch("/{client_id}", response_model=ClientOut)
+def update_client(client_id: uuid.UUID, payload: ClientUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    client = _client(db, user, client_id)
+    values = payload.model_dump(exclude_unset=True)
+    industry = values.get("industry", client.industry)
+    business_type = values.get("business_type", client.business_type)
+    # Changing the industry drops a type that no longer belongs to it.
+    if "industry" in values and "business_type" not in values and industries.get_type(industry, business_type) is None:
+        values["business_type"] = ""
+        business_type = ""
+    _check_industry(industry, business_type)
+    for key, value in values.items():
+        setattr(client, key, value)
+    db.commit()
+    return _client(db, user, client_id)
+
+
+@router.post("/{client_id}/logo", response_model=ClientOut)
+async def upload_client_logo(
+    client_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    client = _client(db, user, client_id)
+    if file.content_type not in ALLOWED_LOGO_TYPES:
+        raise HTTPException(status_code=400, detail="Use a PNG, JPG, WebP or SVG logo")
+    data = await file.read(MAX_LOGO_BYTES + 1)
+    if len(data) > MAX_LOGO_BYTES:
+        raise HTTPException(status_code=413, detail="The logo exceeds the 2 MB limit")
+    client.logo_data = data
+    client.logo_mime = file.content_type
+    db.commit()
+    return _client(db, user, client_id)
+
+
+@router.get("/{client_id}/logo")
+def get_client_logo(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    client = _client(db, user, client_id)
+    if not client.logo_data or not client.logo_mime:
+        raise HTTPException(status_code=404, detail="This client does not have a logo yet")
+    return logo_response(client.logo_data, client.logo_mime)
+
+
+@router.delete("/{client_id}/logo", status_code=status.HTTP_204_NO_CONTENT)
+def delete_client_logo(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    client = _client(db, user, client_id)
+    client.logo_data = None
+    client.logo_mime = None
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/{client_id}/portal", response_model=ClientOut)
+def update_client_portal(
+    client_id: uuid.UUID,
+    payload: ClientPortalUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    client = _client(db, user, client_id)
+    values = payload.model_dump(exclude_unset=True)
+    if "portal_slug" in values and values["portal_slug"]:
+        candidate = slugify(values["portal_slug"])
+        existing = db.scalar(select(Client).where(Client.portal_slug == candidate, Client.id != client.id))
+        if existing:
+            raise HTTPException(status_code=409, detail="That portal URL is already in use")
+        values["portal_slug"] = candidate
+    for key, value in values.items():
+        setattr(client, key, value)
+    has_users = db.scalar(
+        select(func.count(PortalUser.id)).where(
+            PortalUser.client_id == client.id, PortalUser.is_active.is_(True)
+        )
+    )
+    if client.portal_enabled and not has_users:
+        raise HTTPException(status_code=400, detail="Add someone who can sign in before enabling the portal")
+    db.commit()
+    return _client(db, user, client_id)
+
+
+@router.get("/{client_id}/domain", response_model=ClientDomainOut)
+def get_client_domain(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return _domain_out(_client(db, user, client_id))
+
+
+@router.put("/{client_id}/domain", response_model=ClientDomainOut)
+def set_client_domain(
+    client_id: uuid.UUID,
+    payload: ClientDomainSet,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    client = _client(db, user, client_id)
+    domain = payload.domain.strip().lower()
+    taken = db.scalar(select(Client).where(Client.portal_domain == domain, Client.id != client.id))
+    if taken:
+        raise HTTPException(status_code=409, detail="That domain is already in use")
+    # Re-assigning resets verification and issues a fresh challenge token.
+    if client.portal_domain != domain or not client.portal_domain_token:
+        client.portal_domain_token = new_domain_token()
+    client.portal_domain = domain
+    client.portal_domain_verified = False
+    db.commit()
+    return _domain_out(_client(db, user, client_id))
+
+
+@router.post("/{client_id}/domain/verify", response_model=ClientDomainOut)
+def verify_client_domain(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    client = _client(db, user, client_id)
+    if not client.portal_domain:
+        raise HTTPException(status_code=400, detail="Add a domain before verifying it")
+    if not dns_service.txt_contains(client.portal_domain, client.portal_domain_token):
+        raise HTTPException(status_code=400, detail="The verification TXT record was not found yet. DNS can take a while to propagate.")
+    client.portal_domain_verified = True
+    db.commit()
+    return _domain_out(_client(db, user, client_id))
+
+
+@router.delete("/{client_id}/domain", response_model=ClientDomainOut)
+def delete_client_domain(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    client = _client(db, user, client_id)
+    client.portal_domain = None
+    client.portal_domain_verified = False
+    client.portal_domain_token = ""
+    db.commit()
+    return _domain_out(_client(db, user, client_id))
+
+
+@router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_client(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Delete the client and everything under it: agents, channels, contacts,
+    conversations, portal users. The UI shows the counts and asks for the
+    client's name before calling this.
+
+    A linked WhatsApp device is logged out first so the phone does not keep a
+    session to a channel that no longer exists. Best-effort: a bridge that is
+    down must not keep a client from being deleted.
+    """
+    client = _client(db, user, client_id)
+    for whatsapp in client.whatsapp_channels:
+        if whatsapp.encrypted_auth_state:
+            try:
+                await bridge_command("POST", f"/channels/{whatsapp.id}/disconnect")
+            except Exception:  # noqa: BLE001 - the deletion goes ahead regardless
+                pass
+    from ..models import SocialChannel
+    from ..services.social_connections import disconnect_channel
+    for channel in db.scalars(select(SocialChannel).where(SocialChannel.client_id == client.id)).all():
+        await disconnect_channel(db, channel)
+    db.delete(client)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{client_id}/deletion-preview", response_model=ClientDeletionPreview)
+def client_deletion_preview(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """What deleting this client takes with it."""
+    client = _client(db, user, client_id)
+
+    def count(model, *conds) -> int:
+        return db.scalar(select(func.count()).select_from(model).where(*conds)) or 0
+
+    channels = len(client.whatsapp_channels) + len(client.whatsapp_cloud_channels) + (1 if client.widget_channel is not None else 0)
+    return {
+        "agents": count(Agent, Agent.client_id == client.id, Agent.deleted_at.is_(None)),
+        "channels": channels,
+        "conversations": count(Conversation, Conversation.client_id == client.id, Conversation.channel != "playground"),
+        "contacts": count(Contact, Contact.client_id == client.id),
+        "portal_users": count(PortalUser, PortalUser.client_id == client.id),
+    }
+
+
+def _portal_user(db: Session, user: User, client_id: uuid.UUID, portal_user_id: uuid.UUID) -> PortalUser:
+    # Resolving the client first keeps this inside the caller's agency.
+    client = _client(db, user, client_id)
+    portal_user = db.scalar(
+        select(PortalUser).where(PortalUser.id == portal_user_id, PortalUser.client_id == client.id)
+    )
+    if not portal_user:
+        raise HTTPException(status_code=404, detail="That person is not on this portal")
+    return portal_user
+
+
+def _portal_user_out(db: Session, portal_user: PortalUser) -> PortalUserOut:
+    devices = db.scalar(
+        select(func.count(PushDevice.id)).where(PushDevice.portal_user_id == portal_user.id)
+    )
+    return PortalUserOut(
+        id=portal_user.id,
+        email=portal_user.email,
+        name=portal_user.name,
+        role=portal_user.role,
+        is_active=portal_user.is_active,
+        devices=devices or 0,
+        created_at=portal_user.created_at,
+    )
+
+
+@router.get("/{client_id}/portal-users", response_model=list[PortalUserOut])
+def list_portal_users(
+    client_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Everyone who can answer for this client."""
+    client = _client(db, user, client_id)
+    rows = db.scalars(
+        select(PortalUser).where(PortalUser.client_id == client.id).order_by(PortalUser.created_at)
+    ).all()
+    return [_portal_user_out(db, row) for row in rows]
+
+
+# Teams and WhatsApp templates belong to the client and are managed from two
+# doors: the client's own portal and this page of the agency. Same rows, same
+# service code; only the way the client is resolved differs.
+
+
+@router.get("/{client_id}/members", response_model=list[PortalMemberOut])
+def client_members(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """The active portal users, as the team editor needs them."""
+    return members_out(db, _client(db, user, client_id))
+
+
+@router.get("/{client_id}/teams", response_model=list[TeamOut])
+def client_teams(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """The client's trays, for this page and for pickers like the escalation rule editor."""
+    client = _client(db, user, client_id)
+    return [team_out(db, team) for team in list_teams(db, client)]
+
+
+@router.post("/{client_id}/teams", response_model=TeamOut, status_code=status.HTTP_201_CREATED)
+def client_create_team(client_id: uuid.UUID, payload: TeamUpsert, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    client = _client(db, user, client_id)
+    return team_out(db, create_team(db, client, payload))
+
+
+@router.patch("/{client_id}/teams/{team_id}", response_model=TeamOut)
+def client_update_team(
+    client_id: uuid.UUID, team_id: uuid.UUID, payload: TeamUpsert, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    client = _client(db, user, client_id)
+    return team_out(db, update_team(db, client, team_id, payload))
+
+
+@router.delete("/{client_id}/teams/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
+def client_delete_team(client_id: uuid.UUID, team_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    delete_team(db, _client(db, user, client_id), team_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{client_id}/templates", response_model=list[TemplateOut])
+async def client_templates(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    token, waba_id = template_credentials(db, _client(db, user, client_id))
+    return await list_templates(token, waba_id)
+
+
+@router.post("/{client_id}/templates", response_model=TemplateOut, status_code=status.HTTP_201_CREATED)
+async def client_create_template(
+    client_id: uuid.UUID, payload: TemplateCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    token, waba_id = template_credentials(db, _client(db, user, client_id))
+    return await create_template(
+        token,
+        waba_id,
+        name=validate_template_name(payload.name),
+        language=payload.language.strip(),
+        category=payload.category,
+        header=payload.header.model_dump() if payload.header else None,
+        body=payload.body.strip(),
+        footer=payload.footer,
+        buttons=[button.model_dump() for button in payload.buttons],
+        examples=payload.examples,
+    )
+
+
+@router.post("/{client_id}/templates/samples", response_model=TemplateSampleOut, status_code=status.HTTP_201_CREATED)
+async def client_upload_template_sample(
+    client_id: uuid.UUID, file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    token, _waba_id = template_credentials(db, _client(db, user, client_id))
+    data, mime, filename = await read_sample(file)
+    return {"handle": await upload_sample(token, data=data, mime=mime, filename=filename)}
+
+
+@router.delete("/{client_id}/templates/{name}", status_code=status.HTTP_204_NO_CONTENT)
+async def client_delete_template(
+    client_id: uuid.UUID,
+    name: str,
+    hsm_id: str | None = Query(default=None, max_length=64),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    token, waba_id = template_credentials(db, _client(db, user, client_id))
+    await delete_template(token, waba_id, name=validate_template_name(name), hsm_id=hsm_id)
+
+
+@router.get("/{client_id}/contact-tags", response_model=list[ContactTagOut])
+def client_contact_tags(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """The client's contact tags, with where each one routes. Managed here and
+    in the client portal alike; routing only here."""
+    return list_tags(db, _client(db, user, client_id))
+
+
+@router.post("/{client_id}/contact-tags", response_model=ContactTagOut, status_code=status.HTTP_201_CREATED)
+def client_create_contact_tag(client_id: uuid.UUID, payload: ContactTagCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return tag_out(create_tag(db, _client(db, user, client_id), payload.name, payload.color))
+
+
+@router.patch("/{client_id}/contact-tags/{tag_id}", response_model=ContactTagOut)
+def client_update_contact_tag(
+    client_id: uuid.UUID, tag_id: uuid.UUID, payload: ContactTagUpdate,
+    db: Session = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Name, color and routing. Routing points at a team or a person; sending
+    either sets it and clears the other, explicit nulls clear it."""
+    client = _client(db, user, client_id)
+    tag = get_tag(db, client, tag_id)
+    rename_tag(db, client, tag, payload.name, payload.color)
+    sent = payload.model_fields_set
+    if "route_team_id" in sent or "route_assignee_id" in sent:
+        if payload.route_team_id is not None:
+            team = db.scalar(select(Team).where(Team.id == payload.route_team_id, Team.client_id == client.id))
+            if team is None:
+                raise HTTPException(status_code=404, detail="Team not found")
+            tag.route_team_id, tag.route_assignee_id = team.id, None
+        elif payload.route_assignee_id is not None:
+            person = db.scalar(select(PortalUser).where(PortalUser.id == payload.route_assignee_id, PortalUser.client_id == client.id))
+            if person is None:
+                raise HTTPException(status_code=404, detail="Person not found")
+            tag.route_team_id, tag.route_assignee_id = None, person.id
+        else:
+            tag.route_team_id, tag.route_assignee_id = None, None
+    elif not sent:
+        raise HTTPException(status_code=422, detail="Nothing to change")
+    db.commit()
+    db.refresh(tag)
+    return tag_out(tag, tag_count(db, tag))
+
+
+@router.delete("/{client_id}/contact-tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+def client_delete_contact_tag(client_id: uuid.UUID, tag_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    delete_tag(db, _client(db, user, client_id), tag_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{client_id}/portal-users", response_model=PortalUserOut, status_code=status.HTTP_201_CREATED)
+def create_portal_user(
+    client_id: uuid.UUID,
+    payload: PortalUserCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    client = _client(db, user, client_id)
+    email = payload.email.lower()
+    existing = db.scalar(
+        select(PortalUser).where(PortalUser.client_id == client.id, PortalUser.email == email)
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="That e-mail is already on this portal")
+    role = payload.role
+    if role is None:
+        # The first person at a business runs it; the ones added later work
+        # the inbox until the agency says otherwise.
+        anyone = db.scalar(select(PortalUser.id).where(PortalUser.client_id == client.id).limit(1))
+        role = DEFAULT_ROLE if anyone else "admin"
+    portal_user = PortalUser(
+        client_id=client.id,
+        email=email,
+        name=payload.name.strip(),
+        role=role,
+        password_hash=hash_password(payload.password),
+    )
+    db.add(portal_user)
+    db.commit()
+    db.refresh(portal_user)
+    return _portal_user_out(db, portal_user)
+
+
+@router.patch("/{client_id}/portal-users/{portal_user_id}", response_model=PortalUserOut)
+def update_portal_user(
+    client_id: uuid.UUID,
+    portal_user_id: uuid.UUID,
+    payload: PortalUserUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    portal_user = _portal_user(db, user, client_id, portal_user_id)
+    values = payload.model_dump(exclude_unset=True)
+    password = values.pop("password", None)
+    if password:
+        portal_user.password_hash = hash_password(password)
+    if values.get("email"):
+        email = str(values["email"]).lower()
+        clash = db.scalar(
+            select(PortalUser).where(
+                PortalUser.client_id == portal_user.client_id,
+                PortalUser.email == email,
+                PortalUser.id != portal_user.id,
+            )
+        )
+        if clash:
+            raise HTTPException(status_code=409, detail="That e-mail is already on this portal")
+        values["email"] = email
+    if values.get("name") is not None:
+        values["name"] = str(values["name"]).strip()
+    for key, value in values.items():
+        setattr(portal_user, key, value)
+    db.commit()
+    db.refresh(portal_user)
+    return _portal_user_out(db, portal_user)
+
+
+@router.delete("/{client_id}/portal-users/{portal_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_portal_user(
+    client_id: uuid.UUID,
+    portal_user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Remove someone's access.
+
+    Their registered devices go with them, so a phone that left the business
+    stops ringing straight away.
+    """
+    portal_user = _portal_user(db, user, client_id, portal_user_id)
+    db.delete(portal_user)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Custom contact fields ---------------------------------------------------
+# Defined once per client; every agent of the client can ask for them and the
+# portal shows them on the contact.
+
+
+def _field_out(db: Session, client_id: uuid.UUID, definition) -> ContactFieldOut:
+    builtin = getattr(definition, "builtin", False)
+    return ContactFieldOut(
+        id=getattr(definition, "id", None), key=definition.key, label=definition.label, kind=definition.kind,
+        description=definition.description, builtin=builtin,
+        contact_count=0 if builtin else contacts_holding(db, client_id, definition.key),
+    )
+
+
+def _contact_field(db: Session, client: Client, field_id: uuid.UUID) -> ContactField:
+    row = db.scalar(select(ContactField).where(ContactField.id == field_id, ContactField.client_id == client.id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Contact field not found")
+    return row
+
+
+@router.get("/{client_id}/contact-fields", response_model=list[ContactFieldOut])
+def list_contact_fields(client_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Built-ins first, then the client's own, in their order."""
+    client = _client(db, user, client_id)
+    return [_field_out(db, client.id, definition) for definition in field_definitions(db, client.id).values()]
+
+
+@router.post("/{client_id}/contact-fields", response_model=ContactFieldOut, status_code=status.HTTP_201_CREATED)
+def create_contact_field(
+    client_id: uuid.UUID, payload: ContactFieldIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    client = _client(db, user, client_id)
+    if payload.key in BUILTIN_FIELDS:
+        raise HTTPException(status_code=409, detail="That key is a built-in field")
+    if db.scalar(select(ContactField.id).where(ContactField.client_id == client.id, ContactField.key == payload.key)):
+        raise HTTPException(status_code=409, detail="A field with that key already exists")
+    position = db.scalar(select(func.count()).select_from(ContactField).where(ContactField.client_id == client.id)) or 0
+    row = ContactField(
+        client_id=client.id, key=payload.key, label=payload.label.strip(), kind=payload.kind,
+        description=payload.description.strip(), position=position,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return _field_out(db, client.id, row)
+
+
+@router.patch("/{client_id}/contact-fields/{field_id}", response_model=ContactFieldOut)
+def update_contact_field(
+    client_id: uuid.UUID, field_id: uuid.UUID, payload: ContactFieldUpdate,
+    db: Session = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """The key never changes: agents and contacts refer to it."""
+    client = _client(db, user, client_id)
+    row = _contact_field(db, client, field_id)
+    if payload.label is not None:
+        row.label = payload.label.strip()
+    if payload.kind is not None:
+        row.kind = payload.kind
+    if payload.description is not None:
+        row.description = payload.description.strip()
+    db.commit()
+    db.refresh(row)
+    return _field_out(db, client.id, row)
+
+
+@router.delete("/{client_id}/contact-fields/{field_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_contact_field(
+    client_id: uuid.UUID, field_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """Removes the definition, every agent's request for it, and the value
+    from every contact that held one: nothing keeps a value no field labels."""
+    client = _client(db, user, client_id)
+    row = _contact_field(db, client, field_id)
+    agent_ids = select(Agent.id).where(Agent.client_id == client.id)
+    for capture in db.scalars(select(AgentCaptureField).where(AgentCaptureField.field_key == row.key, AgentCaptureField.agent_id.in_(agent_ids))):
+        db.delete(capture)
+    strip_attribute(db, client.id, row.key)
+    db.delete(row)
+    db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

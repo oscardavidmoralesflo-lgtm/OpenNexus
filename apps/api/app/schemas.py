@@ -1,0 +1,1451 @@
+import uuid
+from datetime import date, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+
+from .services.capture import CAPTURE_CHANNELS, FIELD_KEY_PATTERN, FIELD_KINDS
+from .services.model_catalog import DEFAULT_AUDIO_MODEL, DEFAULT_EMBEDDING_MODEL
+
+# OpenRouter slug: "vendor/model", optionally with a ":variant" suffix.
+MODEL_SLUG_PATTERN = r"^[a-z0-9-]+/[A-Za-z0-9._-]+(?::[a-z0-9-]+)?$"
+
+
+class ORMModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RegisterRequest(BaseModel):
+    agency_name: str = Field(min_length=2, max_length=180)
+    name: str = Field(min_length=2, max_length=160)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class AgencyOut(ORMModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    brand_color: str
+    logo_url: str | None = None
+
+
+class AgencyUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=180)
+    slug: str | None = Field(default=None, min_length=2, max_length=180)
+    brand_color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+class UserOut(ORMModel):
+    id: uuid.UUID
+    name: str
+    email: EmailStr
+    role: str
+    agency: AgencyOut
+
+
+def check_timezone(value: str) -> str:
+    """An IANA zone name the runtime knows, e.g. ``America/Bogota``."""
+    name = (value or "").strip()
+    if not name:
+        return "UTC"
+    try:
+        ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError("Unknown timezone") from exc
+    return name
+
+
+class ClientBase(BaseModel):
+    name: str = Field(min_length=1, max_length=180)
+    industry: str = Field(default="", max_length=160)
+    business_type: str = Field(default="", max_length=80)
+    business_custom: str = Field(default="", max_length=120)
+    # The business's timezone; its agents tell the time in it.
+    timezone: str = Field(default="UTC", max_length=64)
+    is_active: bool = True
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, value: str) -> str:
+        return check_timezone(value)
+
+
+class ClientCreate(ClientBase):
+    pass
+
+
+class ClientUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=180)
+    industry: str | None = Field(default=None, max_length=160)
+    business_type: str | None = Field(default=None, max_length=80)
+    business_custom: str | None = Field(default=None, max_length=120)
+    timezone: str | None = Field(default=None, max_length=64)
+    is_active: bool | None = None
+
+    @field_validator("timezone")
+    @classmethod
+    def _known_timezone(cls, value: str | None) -> str | None:
+        return None if value is None else check_timezone(value)
+
+
+class ClientPortalUpdate(BaseModel):
+    portal_enabled: bool | None = None
+    portal_slug: str | None = Field(default=None, min_length=2, max_length=180)
+    portal_title: str | None = Field(default=None, max_length=180)
+
+
+class AgentSummary(ORMModel):
+    id: uuid.UUID
+    name: str
+    is_active: bool
+
+
+class ClientOut(ORMModel):
+    id: uuid.UUID
+    name: str
+    industry: str
+    business_type: str
+    business_custom: str
+    timezone: str
+    is_active: bool
+    portal_slug: str
+    portal_enabled: bool
+    portal_title: str
+    portal_domain: str | None
+    portal_domain_verified: bool
+    logo_url: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    agents: list[AgentSummary] = []
+
+    @field_validator("agents", mode="before")
+    @classmethod
+    def _living_agents(cls, value):
+        # Deleted agents keep their row for the conversations they handled;
+        # they are not part of the client anymore.
+        return [item for item in value if getattr(item, "deleted_at", None) is None]
+
+
+class PortalUserCreate(BaseModel):
+    """A person at the client's business who can answer from the portal or app."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(default="", max_length=160)
+    # admin or agent; see app.portal_permissions for what each one may do.
+    # Left out, the first person of a business is its admin and everyone
+    # after starts as an agent.
+    role: str | None = Field(default=None, pattern=r"^(admin|agent)$")
+
+
+class PortalUserUpdate(BaseModel):
+    email: EmailStr | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    name: str | None = Field(default=None, max_length=160)
+    role: str | None = Field(default=None, pattern=r"^(admin|agent)$")
+    is_active: bool | None = None
+
+
+class PortalUserOut(BaseModel):
+    id: uuid.UUID
+    email: EmailStr
+    name: str
+    role: str
+    is_active: bool
+    devices: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ClientDomainSet(BaseModel):
+    # A DNS hostname, e.g. "chat.brand.com". Lowercased and validated as a host.
+    # No look-around: pydantic v2's regex engine does not support it.
+    domain: str = Field(
+        min_length=3,
+        max_length=255,
+        pattern=r"^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$",
+    )
+
+
+class ClientDomainOut(BaseModel):
+    domain: str | None
+    verified: bool
+    # DNS records the operator/client must create.
+    txt_host: str | None
+    txt_value: str | None
+
+
+class ProviderKeyUpdate(BaseModel):
+    api_key: str = Field(min_length=1)
+
+
+class ProviderKeyToggle(BaseModel):
+    # False pauses the stored key: it stays, but replies no longer use it.
+    enabled: bool
+
+
+class ProviderOut(BaseModel):
+    provider: str
+    label: str
+    configured: bool
+    # "agency": the agency's own key; "deployment": a key the deployment lends
+    # (see services.providers.register_credential_fallback); "none": no key.
+    source: Literal["agency", "deployment", "none"] = "none"
+    # Whether the agency holds a key of its own, and whether that key is in
+    # use. A stored key that is paused reads stored and not enabled, and
+    # ``source`` says what answers in its place.
+    stored: bool = False
+    enabled: bool = True
+    api_key_masked: str = ""
+
+
+# Upper bound of the reply delay sliders, in seconds.
+REPLY_DELAY_MAX_SECONDS = 60
+REPLY_DELAY_ORDER_ERROR = "The maximum reply delay must be greater than or equal to the minimum."
+
+
+def check_reply_delay(minimum: int, maximum: int) -> None:
+    if maximum < minimum:
+        raise ValueError(REPLY_DELAY_ORDER_ERROR)
+
+
+class ScheduleSlot(BaseModel):
+    """One stretch of an agent's week: a weekday (0 Monday to 6 Sunday) and
+    the local times, "HH:MM", it starts and ends; "24:00" ends the day."""
+
+    day: int = Field(ge=0, le=6)
+    start: str = Field(pattern=r"^\d{2}:\d{2}$")
+    end: str = Field(pattern=r"^\d{2}:\d{2}$")
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "ScheduleSlot":
+        from .services.availability import check_slots
+
+        check_slots([self.model_dump()])
+        return self
+
+
+class AgentBase(BaseModel):
+    client_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=180)
+    instructions: str = ""
+    personality: str = ""
+    brief_summary: str = ""
+    brief_products: str = ""
+    brief_audience: str = ""
+    brief_policies: str = ""
+    brief_dos: str = ""
+    brief_donts: str = ""
+    model: str = ""
+    provider: str = Field(default="openrouter", pattern=r"^(openrouter)$")
+    prompt_language: str = Field(default="es", pattern=r"^(en|es)$")
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=2048, ge=1, le=32000)
+    memory_limit: int = Field(default=30, ge=0, le=200)
+    phone_handover_minutes: int = Field(default=10, ge=1, le=1440)
+    reply_delay_min_seconds: int = Field(default=6, ge=0, le=REPLY_DELAY_MAX_SECONDS)
+    reply_delay_max_seconds: int = Field(default=9, ge=0, le=REPLY_DELAY_MAX_SECONDS)
+    image_enabled: bool = True
+    image_model: str = Field(default="", max_length=180)
+    audio_enabled: bool = True
+    audio_model: str = Field(default=DEFAULT_AUDIO_MODEL, max_length=180)
+    embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, max_length=180, pattern=MODEL_SLUG_PATTERN)
+    is_active: bool = True
+    # On duty only inside these slots when enabled (see services.availability).
+    schedule_enabled: bool = False
+    schedule_slots: list[ScheduleSlot] = []
+
+    @model_validator(mode="after")
+    def _reply_delay_bounds(self) -> "AgentBase":
+        check_reply_delay(self.reply_delay_min_seconds, self.reply_delay_max_seconds)
+        return self
+
+
+class AgentCreate(AgentBase):
+    pass
+
+
+class AgentUpdate(BaseModel):
+    client_id: uuid.UUID | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=180)
+    instructions: str | None = None
+    personality: str | None = None
+    brief_summary: str | None = None
+    brief_products: str | None = None
+    brief_audience: str | None = None
+    brief_policies: str | None = None
+    brief_dos: str | None = None
+    brief_donts: str | None = None
+    model: str | None = None
+    provider: str | None = Field(default=None, pattern=r"^(openrouter)$")
+    prompt_language: str | None = Field(default=None, pattern=r"^(en|es)$")
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=32000)
+    memory_limit: int | None = Field(default=None, ge=0, le=200)
+    phone_handover_minutes: int | None = Field(default=None, ge=1, le=1440)
+    reply_delay_min_seconds: int | None = Field(default=None, ge=0, le=REPLY_DELAY_MAX_SECONDS)
+    reply_delay_max_seconds: int | None = Field(default=None, ge=0, le=REPLY_DELAY_MAX_SECONDS)
+    image_enabled: bool | None = None
+    image_model: str | None = Field(default=None, max_length=180)
+    audio_enabled: bool | None = None
+    audio_model: str | None = Field(default=None, max_length=180)
+    embedding_model: str | None = Field(default=None, max_length=180, pattern=MODEL_SLUG_PATTERN)
+    is_active: bool | None = None
+    schedule_enabled: bool | None = None
+    schedule_slots: list[ScheduleSlot] | None = None
+
+
+class AgentOut(ORMModel):
+    id: uuid.UUID
+    client_id: uuid.UUID
+    provider: str
+    name: str
+    instructions: str
+    personality: str
+    brief_summary: str
+    brief_products: str
+    brief_audience: str
+    brief_policies: str
+    brief_dos: str
+    brief_donts: str
+    model: str
+    prompt_language: str
+    temperature: float
+    max_tokens: int
+    memory_limit: int
+    phone_handover_minutes: int
+    reply_delay_min_seconds: int
+    reply_delay_max_seconds: int
+    image_enabled: bool
+    image_model: str
+    audio_enabled: bool
+    audio_model: str
+    embedding_model: str
+    is_active: bool
+    schedule_enabled: bool
+    schedule_slots: list[ScheduleSlot]
+    created_at: datetime
+    updated_at: datetime
+    client: ClientOut
+
+
+class AgentPromptOut(BaseModel):
+    """The system prompt an agent sends, before per-message knowledge retrieval."""
+
+    prompt: str
+
+
+class QAPairCreate(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    answer: str = Field(min_length=1, max_length=8000)
+
+
+class QAPairOut(ORMModel):
+    id: uuid.UUID
+    question: str
+    answer: str
+
+
+class ModelCatalogOut(BaseModel):
+    id: str
+    provider: str
+    label: str
+    family: str
+    context_window: int
+    max_output_tokens: int
+    supports_tools: bool
+    supports_vision: bool
+    input_price_per_1k: float
+    output_price_per_1k: float
+    badge: str = ""
+    note: str = ""
+
+
+class DocumentOut(ORMModel):
+    id: uuid.UUID
+    filename: str
+    status: str
+    error_message: str | None
+    created_at: datetime
+    character_count: int = 0
+    # Embedding model of the stored chunks, or None when nothing is indexed.
+    indexed_model: str | None = None
+    chunk_count: int = 0
+
+
+class EmbeddingModelOut(BaseModel):
+    id: str
+    provider: str
+    label: str
+    context_window: int
+    input_price_per_1k: float
+    note: str = ""
+
+
+class ConversationCreate(BaseModel):
+    agent_id: uuid.UUID
+
+
+class ConversationOut(ORMModel):
+    id: uuid.UUID
+    client_id: uuid.UUID
+    agent_id: uuid.UUID
+    title: str
+    mode: str
+    channel: str
+    external_chat_id: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_id: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+    status: str = "open"
+    resolved_at: datetime | None = None
+    archived_at: datetime | None = None
+    first_reply_at: datetime | None = None
+    phone_pause_until: datetime | None = None
+    taken_over_at: datetime | None = None
+    waiting_since: datetime | None = None
+    assignee_id: uuid.UUID | None = None
+    assignee_name: str | None = None
+    team_id: uuid.UUID | None = None
+    team_name: str | None = None
+    # WhatsApp Cloud API: free-form replies are allowed until this moment
+    # (24 h after the contact's last message). None on other channels or
+    # when the contact never wrote; ``reply_window_open`` says what applies.
+    reply_window_until: datetime | None = None
+    reply_window_open: bool = True
+    human_reply_window_until: datetime | None = None
+    human_reply_window_open: bool = True
+    reply_block_reason: str | None = None
+    channel_capabilities: dict[str, bool] | None = None
+    social_channel_id: uuid.UUID | None = None
+    # The account this runs on, for clients with several on one channel.
+    account_label: str | None = None
+    preview: str = ""
+    unread: bool = False
+    unread_count: int = 0
+    # When the contact last wrote; the inbox shows this so the row's time
+    # means "waiting since", not "our last activity".
+    last_inbound_at: datetime | None = None
+    # The ad referral the first message carried, when the case started
+    # from a click-to-chat ad. None otherwise.
+    acquisition: dict | None = None
+
+
+class SourceOut(BaseModel):
+    id: str
+    filename: str
+    excerpt: str = ""
+
+
+class AttachmentOut(ORMModel):
+    id: uuid.UUID
+    kind: str
+    mime: str
+    filename: str | None = None
+    size_bytes: int = 0
+
+
+class MessageOut(ORMModel):
+    id: uuid.UUID
+    role: str
+    kind: str = "message"
+    is_historical: bool = False
+    activity: dict | None = None
+    content: str
+    sources: list[dict] = []
+    tool_calls: list[dict] | None = None
+    sender_type: str
+    sender_name: str | None
+    external_message_id: str | None = None
+    delivery_status: str | None = None
+    delivery_error: str | None = None
+    reaction: str | None = None
+    incoming_reaction: str | None = None
+    quoted_message_id: uuid.UUID | None = None
+    buttons: list[dict] | None = None
+    created_at: datetime
+    attachments: list[AttachmentOut] = []
+
+
+class ConversationSummaryOut(BaseModel):
+    """A conversation's summary for the team; ``stale`` when messages arrived after it."""
+
+    summary: str | None = None
+    summary_at: datetime | None = None
+    # Who asked for it: the portal person's name, or their e-mail.
+    summary_by: str | None = None
+    message_count: int = 0
+    current_message_count: int = 0
+    stale: bool = False
+
+
+class ConversationSummaryRequest(BaseModel):
+    # The language the summary is written in: the reader's interface language.
+    language: Literal["es", "en"] = "es"
+
+
+class ConversationDetail(ConversationOut):
+    messages: list[MessageOut] = []
+
+
+class ConversationInboxOut(BaseModel):
+    id: uuid.UUID
+    agent_id: uuid.UUID
+    agent_name: str
+    client_id: uuid.UUID
+    title: str
+    contact_name: str | None = None
+    channel: str
+    account_label: str | None = None
+    mode: str
+    preview: str = ""
+    unread: bool = False
+    unread_count: int = 0
+    updated_at: datetime
+    last_inbound_at: datetime | None = None
+
+
+class SendMessageRequest(BaseModel):
+    content: str = Field(min_length=1, max_length=50000)
+    # Reply quoting this earlier message of the conversation (swipe-to-reply).
+    quoted_message_id: uuid.UUID | None = None
+
+
+class ReactionRequest(BaseModel):
+    # Empty string removes the reaction.
+    emoji: str = Field(default="", max_length=16)
+
+
+class ConversationModeUpdate(BaseModel):
+    mode: str = Field(pattern=r"^(ai|human)$")
+
+
+class ConversationStatusUpdate(BaseModel):
+    status: str = Field(pattern=r"^(open|resolved)$")
+
+
+class ConversationArchiveUpdate(BaseModel):
+    archived: bool
+
+
+class ConversationSelection(BaseModel):
+    """Which archived conversations to delete; none means all of them."""
+
+    ids: list[uuid.UUID] | None = None
+
+
+class BulkResult(BaseModel):
+    count: int
+
+
+class ClientDeletionPreview(BaseModel):
+    """What goes with the client, so the person deleting it sees it first."""
+
+    agents: int = 0
+    channels: int = 0
+    conversations: int = 0
+    contacts: int = 0
+    portal_users: int = 0
+
+
+class ConversationAssignmentUpdate(BaseModel):
+    # The portal user who takes the conversation. Letting go of it means
+    # returning it to the AI, not leaving it without an owner.
+    assignee_id: uuid.UUID | None = None
+
+
+class PortalMemberOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: str
+    availability: str = "online"
+
+
+class TeamMemberOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    email: str
+    availability: str = "online"
+
+
+class TeamOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: str = ""
+    strategy: str = "round_robin"
+    channels: list[str] = []
+    is_default: bool = False
+    members: list[TeamMemberOut] = []
+    open_count: int = 0
+    unassigned_count: int = 0
+
+
+class TeamUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=500)
+    strategy: str = Field(default="round_robin", pattern=r"^(round_robin|least_busy)$")
+    channels: list[str] = []
+    is_default: bool = False
+    member_ids: list[uuid.UUID] = []
+
+
+class ConversationTeamUpdate(BaseModel):
+    team_id: uuid.UUID | None = None
+
+
+class EscalationRuleIn(BaseModel):
+    # WHEN, in the business's words; the model evaluates it contextually.
+    condition: str = Field(min_length=1, max_length=2000)
+    # WHERE, a hard reference: exactly one of these two.
+    team_id: uuid.UUID | None = None
+    assignee_id: uuid.UUID | None = None
+    is_active: bool = True
+
+
+class EscalationRuleOut(BaseModel):
+    id: uuid.UUID
+    position: int
+    condition: str
+    team_id: uuid.UUID | None = None
+    team_name: str | None = None
+    assignee_id: uuid.UUID | None = None
+    assignee_name: str | None = None
+    is_active: bool = True
+    # The destination was deleted; the rule no longer routes anywhere.
+    broken: bool = False
+
+
+class EscalationConfigIn(BaseModel):
+    # Destination of the built-in triggers; at most one of the two. Both empty
+    # falls back to the channel's tray, then the default tray.
+    default_team_id: uuid.UUID | None = None
+    default_assignee_id: uuid.UUID | None = None
+    # The built-in triggers themselves; off leaves only the business rules.
+    builtin_enabled: bool = True
+    rules: list[EscalationRuleIn] = []
+
+
+class EscalationConfigOut(BaseModel):
+    default_team_id: uuid.UUID | None = None
+    default_team_name: str | None = None
+    default_assignee_id: uuid.UUID | None = None
+    default_assignee_name: str | None = None
+    builtin_enabled: bool = True
+    rules: list[EscalationRuleOut] = []
+
+
+class PortalAvailabilityUpdate(BaseModel):
+    availability: str = Field(pattern=r"^(online|away)$")
+
+
+class PortalChannelOut(BaseModel):
+    id: uuid.UUID | None = None
+    channel: str
+    status: str
+    label: str | None = None
+    phone_number: str | None = None
+    display_name: str | None = None
+    supports_templates: bool = False
+    external_account_id: str | None = None
+    username: str | None = None
+    capabilities: dict[str, bool] | None = None
+
+
+class TemplateHeaderOut(BaseModel):
+    format: str
+    text: str = ""
+    parameters: list[str] = []
+
+
+class TemplateButtonOut(BaseModel):
+    type: str
+    text: str = ""
+    url: str = ""
+    phone_number: str = ""
+    example: str = ""
+    # Takes a value at send time: a URL suffix or the code to copy.
+    dynamic: bool = False
+
+
+class TemplateOut(BaseModel):
+    id: str | None = None
+    name: str
+    language: str
+    category: str
+    previous_category: str | None = None
+    status: str
+    parameter_format: str = "POSITIONAL"
+    header: TemplateHeaderOut | None = None
+    body: str
+    footer: str = ""
+    buttons: list[TemplateButtonOut] = []
+    # Body variables in order; `variables` is their count, kept for the mobile app.
+    parameters: list[str] = []
+    variables: int = 0
+    rejected_reason: str | None = None
+
+
+class TemplateHeaderIn(BaseModel):
+    format: str = Field(default="NONE", pattern=r"^(NONE|TEXT|IMAGE|VIDEO|DOCUMENT|LOCATION)$")
+    text: str = Field(default="", max_length=60)
+    # The sample handle from the upload endpoint, for media headers.
+    handle: str = Field(default="", max_length=4096)
+
+
+class TemplateButtonIn(BaseModel):
+    type: str = Field(pattern=r"^(QUICK_REPLY|URL|PHONE_NUMBER|COPY_CODE)$")
+    text: str = Field(default="", max_length=25)
+    url: str = Field(default="", max_length=2000)
+    phone_number: str = Field(default="", max_length=32)
+    # The URL suffix example or the copy code example.
+    example: str = Field(default="", max_length=64)
+
+
+class TemplateCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=512)
+    language: str = Field(default="es", min_length=2, max_length=10)
+    category: str = Field(default="UTILITY", pattern=r"^(UTILITY|MARKETING)$")
+    header: TemplateHeaderIn | None = None
+    body: str = Field(min_length=1, max_length=1024)
+    footer: str = Field(default="", max_length=60)
+    buttons: list[TemplateButtonIn] = Field(default_factory=list, max_length=10)
+    # One example per variable, by its name (or number).
+    examples: dict[str, str] = {}
+
+
+class TemplateSampleOut(BaseModel):
+    handle: str
+
+
+class TemplateLocation(BaseModel):
+    latitude: float
+    longitude: float
+    name: str = Field(default="", max_length=120)
+    address: str = Field(default="", max_length=240)
+
+
+class TemplateSend(BaseModel):
+    name: str = Field(min_length=1, max_length=512)
+    language: str = Field(min_length=2, max_length=10)
+    # Body values in the order of the template's parameters.
+    variables: list[str] = []
+    # The header's variable, or the https link of its media.
+    header_value: str = Field(default="", max_length=2048)
+    location: TemplateLocation | None = None
+    # One slot per button; only the dynamic ones are read.
+    button_values: list[str] = Field(default_factory=list, max_length=10)
+
+
+class ReportDay(BaseModel):
+    date: date
+    started: int = 0
+    resolved: int = 0
+    inbound: int = 0
+    ai_replies: int = 0
+    human_replies: int = 0
+
+
+class ReportChannelRow(BaseModel):
+    channel: str
+    started: int
+
+
+class ReportAgentRow(BaseModel):
+    name: str
+    availability: str
+    replies: int = 0
+    assigned: int = 0
+    open_now: int = 0
+
+
+class PortalReport(BaseModel):
+    started: int
+    resolved: int
+    open_now: int
+    inbound_messages: int
+    human_replies: int
+    ai_replies: int
+    active_contacts: int
+    agents_online: int
+    handoffs: int = 0
+    ai_resolved: int = 0
+    avg_first_reply_seconds: float | None = None
+    avg_resolution_seconds: float | None = None
+    by_day: list[ReportDay]
+    by_channel: list[ReportChannelRow]
+    by_agent: list[ReportAgentRow]
+
+
+class TemplateWebhookOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    # Where the caller posts. It identifies the webhook and is not a secret.
+    url: str
+    # The end of the secret, to tell which one is in use.
+    secret_hint: str
+    # The secret itself, only in the answer that created or regenerated it.
+    secret: str | None = None
+    channel_id: uuid.UUID
+    channel_label: str
+    agent_name: str
+    template_name: str
+    template_language: str
+    is_enabled: bool
+    last_used_at: datetime | None = None
+    created_at: datetime
+
+
+class TemplateWebhookCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    channel_id: uuid.UUID
+    template_name: str = Field(min_length=1, max_length=512)
+    template_language: str = Field(min_length=2, max_length=10)
+
+
+class TemplateWebhookUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    channel_id: uuid.UUID | None = None
+    template_name: str | None = Field(default=None, min_length=1, max_length=512)
+    template_language: str | None = Field(default=None, min_length=2, max_length=10)
+    is_enabled: bool | None = None
+
+
+class TemplateWebhookCall(BaseModel):
+    """What a caller posts to a template webhook."""
+
+    phone: str = Field(min_length=7, max_length=40)
+    # The contact's name, used only when the phone is new to the business.
+    name: str = Field(default="", max_length=180)
+    # Body values by variable name ("1", "2"... for a positional template).
+    variables: dict[str, str | int | float] = Field(default_factory=dict)
+    # The header's variable, or the https link of its media.
+    header: str = Field(default="", max_length=2048)
+    location: TemplateLocation | None = None
+    # One slot per button; only the dynamic ones are read.
+    buttons: list[str] = Field(default_factory=list, max_length=10)
+    # Extra facts for the agent that the template's text does not carry. The
+    # contact never sees it.
+    context: str = Field(default="", max_length=2000)
+    # A retry carrying the same key answers with the first send's result.
+    idempotency_key: str = Field(default="", max_length=120)
+
+
+class TemplateWebhookResult(BaseModel):
+    conversation_id: uuid.UUID
+    message_id: uuid.UUID
+    # Who answers when the contact replies: ai | human.
+    mode: str
+    # Whether this send opened the conversation or joined an open one.
+    started: bool
+    duplicate: bool = False
+    text: str = ""
+
+
+class CannedResponseOut(ORMModel):
+    id: uuid.UUID
+    shortcut: str
+    content: str
+    updated_at: datetime
+
+
+class CannedResponseCreate(BaseModel):
+    shortcut: str = Field(min_length=1, max_length=60, pattern=r"^[a-z0-9_-]+$")
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class CannedResponseUpdate(BaseModel):
+    shortcut: str | None = Field(default=None, min_length=1, max_length=60, pattern=r"^[a-z0-9_-]+$")
+    content: str | None = Field(default=None, min_length=1, max_length=4000)
+
+
+class ConversationStart(BaseModel):
+    # whatsapp_cloud needs a template; whatsapp (QR) takes free text.
+    channel: str | None = Field(default=None, pattern=r"^(whatsapp|whatsapp_cloud)$")
+    # Which of the business's lines to send from; the first enabled one otherwise.
+    channel_id: uuid.UUID | None = None
+    template: TemplateSend | None = None
+    text: str | None = Field(default=None, max_length=4000)
+
+
+class ContactCreate(BaseModel):
+    name: str = Field(default="", max_length=180)
+    phone: str = Field(min_length=7, max_length=40)
+    email: EmailStr | None = None
+    notes: str = Field(default="", max_length=5000)
+    # Custom field values by key; only keys the client defined are kept.
+    attributes: dict[str, str] = Field(default_factory=dict)
+
+
+class ContactUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=180)
+    phone: str | None = Field(default=None, min_length=7, max_length=40)
+    email: EmailStr | None = None
+    notes: str | None = Field(default=None, max_length=5000)
+    # The whole set at once; an empty value drops the key.
+    attributes: dict[str, str] | None = None
+
+
+class ContactFieldIn(BaseModel):
+    """A custom contact field of a client. The key is what the agent and the
+    API use (``snake_case``); the label is what people see; the description
+    tells the agent what the value is and when it applies."""
+
+    key: str = Field(pattern=FIELD_KEY_PATTERN, max_length=60)
+    label: str = Field(min_length=1, max_length=80)
+    kind: str = Field(default="text", pattern="^(" + "|".join(FIELD_KINDS) + ")$")
+    description: str = Field(default="", max_length=1000)
+
+
+class ContactFieldUpdate(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=80)
+    kind: str | None = Field(default=None, pattern="^(" + "|".join(FIELD_KINDS) + ")$")
+    description: str | None = Field(default=None, max_length=1000)
+
+
+class ContactFieldOut(BaseModel):
+    id: uuid.UUID | None = None
+    key: str
+    label: str
+    kind: str
+    description: str = ""
+    # Name, email and phone: always there, stored in their own columns.
+    builtin: bool = False
+    # Contacts of the client holding a value (custom fields only).
+    contact_count: int = 0
+
+
+class CaptureFieldIn(BaseModel):
+    field_key: str = Field(pattern=FIELD_KEY_PATTERN, max_length=60)
+    # Channel groups it is asked on; empty means every channel.
+    channels: list[str] = Field(default_factory=list, max_length=len(CAPTURE_CHANNELS))
+
+    @field_validator("channels")
+    @classmethod
+    def _known_channels(cls, value: list[str]) -> list[str]:
+        unknown = [channel for channel in value if channel not in CAPTURE_CHANNELS]
+        if unknown:
+            raise ValueError(f"Unknown channel: {', '.join(unknown)}")
+        return list(dict.fromkeys(value))
+
+
+class CaptureFieldOut(BaseModel):
+    field_key: str
+    label: str
+    kind: str
+    description: str = ""
+    builtin: bool = False
+    channels: list[str] = Field(default_factory=list)
+
+
+class CaptureConfigIn(BaseModel):
+    """The whole ordered list at once, like the escalation rules."""
+
+    enabled: bool = False
+    fields: list[CaptureFieldIn] = Field(default_factory=list, max_length=30)
+
+
+class CaptureConfigOut(BaseModel):
+    enabled: bool = False
+    fields: list[CaptureFieldOut] = Field(default_factory=list)
+    # Everything the agent could ask for: built-ins plus the client's fields.
+    available: list[ContactFieldOut] = Field(default_factory=list)
+    channels: list[str] = Field(default_factory=lambda: list(CAPTURE_CHANNELS))
+
+
+class FollowUpConfigIn(BaseModel):
+    """How an agent's conversations end: whether it may resolve a case itself,
+    and what it sends when the contact stops answering. Every delay is in
+    minutes and counts from the agent's last reply."""
+
+    resolve_enabled: bool = False
+    enabled: bool = False
+    first_minutes: int | None = None
+    second_minutes: int | None = None
+    close_minutes: int | None = None
+    # A fixed message for that step; empty lets the agent write it from the thread.
+    first_text: str | None = Field(default=None, max_length=1000)
+    second_text: str | None = Field(default=None, max_length=1000)
+    close_text: str | None = Field(default=None, max_length=1000)
+    # Empty means every channel.
+    channels: list[str] = Field(default_factory=list, max_length=10)
+
+
+class FollowUpConfigOut(FollowUpConfigIn):
+    available_channels: list[str] = Field(default_factory=list)
+    min_minutes: int
+    max_minutes: int
+
+
+class ContactTagOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    color: str = "#6b7280"
+    contact_count: int = 0
+    route_team_id: uuid.UUID | None = None
+    route_team_name: str | None = None
+    route_assignee_id: uuid.UUID | None = None
+    route_assignee_name: str | None = None
+
+
+class ContactTagCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    color: str | None = Field(default=None, max_length=20)
+
+
+class ContactTagUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=40)
+    color: str | None = Field(default=None, max_length=20)
+    # Destination is a team or a person; sending either sets it and clears the
+    # other. Explicit nulls clear the routing; leaving both out keeps it.
+    route_team_id: uuid.UUID | None = None
+    route_assignee_id: uuid.UUID | None = None
+
+
+class ContactTagsSet(BaseModel):
+    tag_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+
+
+class ContactOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    phone: str | None = None
+    email: str | None = None
+    notes: str = ""
+    attributes: dict[str, str] = Field(default_factory=dict)
+    tags: list[ContactTagOut] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+    conversation_count: int = 0
+    open_count: int = 0
+    last_activity_at: datetime | None = None
+    blocked_at: datetime | None = None
+
+
+class ContactBlockUpdate(BaseModel):
+    blocked: bool
+
+
+class ContactMergeRequest(BaseModel):
+    # The surviving contact; the one addressed by the URL is folded into it
+    # and deleted.
+    primary_contact_id: uuid.UUID
+
+
+class ContactImportError(BaseModel):
+    # 1-based line number in the file, header included, so it matches what
+    # the person sees in their spreadsheet.
+    row: int
+    name: str = ""
+    phone: str = ""
+    # Machine code the portal translates: phone_missing, phone_invalid,
+    # email_invalid, duplicate_in_file, name_too_long, notes_too_long.
+    reason: str
+
+
+class ContactImportResult(BaseModel):
+    created: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    errors: list[ContactImportError] = Field(default_factory=list)
+    # Rows that were neither imported nor rejected because the file hit the
+    # row limit; zero unless the file is oversized.
+    truncated: int = 0
+
+
+class PortalInboxSummary(BaseModel):
+    open: int = 0
+    resolved: int = 0
+    archived: int = 0
+    human: int = 0
+    ai: int = 0
+    unread: int = 0
+    mine: int = 0
+    unassigned: int = 0
+
+
+class PortalInboxMine(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class PortalInboxOut(BaseModel):
+    """One refresh of the portal inbox: the page of conversations the filters
+    select, how many there are in total, the counters behind the switches and
+    chips, and the open conversations held by the signed-in person."""
+
+    items: list[ConversationOut]
+    total: int
+    summary: PortalInboxSummary
+    mine: list[PortalInboxMine] = []
+
+
+class PortalLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class PortalPublicOut(BaseModel):
+    client_name: str
+    portal_title: str
+    portal_slug: str
+    agency_name: str
+    agency_brand_color: str
+    agency_logo_url: str | None
+    client_logo_url: str | None = None
+    # Store pages of the deployment's mobile app, when it publishes one.
+    ios_app_url: str | None = None
+    android_app_url: str | None = None
+
+
+class PortalSessionOut(BaseModel):
+    client_id: uuid.UUID
+    client_name: str
+    portal_slug: str
+    agency_name: str
+    # The person behind the session; absent on sessions that predate portal users.
+    user_id: uuid.UUID | None = None
+    user_name: str | None = None
+    # What this person may do. Empty for a session with no person behind it.
+    role: str | None = None
+    permissions: list[str] = []
+
+
+class DashboardOut(BaseModel):
+    clients: int
+    active_clients: int
+    agents: int
+    active_agents: int
+    conversations: int
+    channels: int
+    connected_channels: int
+    recent_agents: list[AgentSummary]
+
+
+class DailyPoint(BaseModel):
+    date: str
+    count: int
+
+
+class TopAgent(BaseModel):
+    id: uuid.UUID
+    name: str
+    conversations: int
+
+
+class ModelUsage(BaseModel):
+    model: str
+    input_tokens: int
+    output_tokens: int
+
+
+class ReportTotals(BaseModel):
+    cost_usd: float
+    replies: int
+    conversations: int
+    input_tokens: int
+    output_tokens: int
+    avg_cost_per_reply_usd: float
+
+
+class ReportGroup(BaseModel):
+    id: str | None
+    name: str
+    replies: int
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+
+
+class CostReportDay(BaseModel):
+    date: str
+    replies: int
+    cost_usd: float
+
+
+class CostReport(BaseModel):
+    totals: ReportTotals
+    by_client: list[ReportGroup]
+    by_agent: list[ReportGroup]
+    by_model: list[ReportGroup]
+    by_day: list[CostReportDay]
+    tz: str
+
+
+class ReportReply(BaseModel):
+    id: uuid.UUID
+    created_at: datetime
+    conversation_id: uuid.UUID | None
+    contact_name: str | None
+    client_id: uuid.UUID | None
+    client_name: str | None
+    agent_id: uuid.UUID | None
+    agent_name: str | None
+    channel: str | None
+    model: str
+    served_by: str
+    input_tokens: int
+    output_tokens: int
+    cached_tokens: int
+    reasoning_tokens: int
+    cost_usd: float
+    # True when the provider reported no cost and the catalog's list price
+    # was used instead.
+    estimated: bool
+    duration_ms: int | None
+    tools: int
+    tool_errors: int
+    # "reply" or "summary"; see UsageRecord.purpose.
+    purpose: str = "reply"
+
+
+class RepliesPage(BaseModel):
+    items: list[ReportReply]
+    total: int
+
+
+class DashboardMetrics(BaseModel):
+    messages: int
+    human_conversations: int
+    by_channel: dict[str, int]
+    daily_conversations: list[DailyPoint]
+    top_agents: list[TopAgent]
+    tokens_in: int
+    tokens_out: int
+    usage_by_model: list[ModelUsage]
+
+
+class WhatsAppChannelUpdate(BaseModel):
+    agent_id: uuid.UUID
+    label: str | None = Field(default=None, max_length=80)
+
+
+class WhatsAppChannelOut(ORMModel):
+    id: uuid.UUID
+    client_id: uuid.UUID
+    agent_id: uuid.UUID
+    status: str
+    phone_number: str | None
+    display_name: str | None
+    label: str | None = None
+    qr_code: str | None = None
+    last_error: str | None
+    is_enabled: bool
+    has_session: bool = False
+    last_connected_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class WhatsAppInternalAuth(BaseModel):
+    auth_state: dict
+
+
+class WhatsAppInternalStatus(BaseModel):
+    status: str = Field(pattern=r"^(disconnected|connecting|qr|connected|reconnecting|error)$")
+    phone_number: str | None = None
+    display_name: str | None = None
+    qr_code: str | None = None
+    error: str | None = None
+
+
+class WidgetChannelUpdate(BaseModel):
+    agent_id: uuid.UUID
+    is_enabled: bool = True
+    greeting: str = Field(default="", max_length=2000)
+    color: str = Field(default="", max_length=20)
+    position: str = Field(default="right", pattern=r"^(right|left)$")
+
+
+class WidgetChannelOut(ORMModel):
+    id: uuid.UUID
+    client_id: uuid.UUID
+    agent_id: uuid.UUID
+    public_id: str
+    is_enabled: bool
+    greeting: str
+    color: str
+    position: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class WidgetConfigOut(BaseModel):
+    title: str
+    greeting: str
+    color: str
+    position: str
+    agency_name: str
+    # Public logo shown in the widget header: the client's own logo when set,
+    # otherwise the agency logo.
+    logo_url: str | None = None
+
+
+class WidgetMessageIn(BaseModel):
+    session_id: str = Field(min_length=1, max_length=120)
+    content: str = Field(min_length=1, max_length=8000)
+
+
+class WidgetMessageOut(BaseModel):
+    id: uuid.UUID | None = None
+    role: str
+    content: str
+    created_at: datetime | None = None
+    attachments: list[AttachmentOut] = []
+    # "ai", "human" or "visitor": lets the widget label a person's reply.
+    sender_type: str | None = None
+    sender_name: str | None = None
+
+
+class WidgetReply(BaseModel):
+    mode: str
+    reply: str | None = None
+    reply_at: datetime | None = None
+    messages: list[WidgetMessageOut] = []
+    # Where the latest case for this visitor stands; resolved means the next
+    # message opens a new one.
+    status: str = "open"
+    conversation_id: uuid.UUID | None = None
+    # Earlier cases of the same visitor, newest first, for the widget's
+    # "previous chats" list.
+    previous: list["WidgetCaseOut"] = []
+
+
+class WidgetCaseOut(BaseModel):
+    id: uuid.UUID
+    title: str
+    created_at: datetime
+    resolved_at: datetime | None = None
+    message_count: int = 0
+
+
+class WhatsAppInbound(BaseModel):
+    external_message_id: str = Field(min_length=1, max_length=255)
+    remote_jid: str = Field(min_length=1, max_length=255)
+    sender_name: str | None = Field(default=None, max_length=180)
+    text: str = Field(default="", max_length=50000)
+    # Optional media (base64) for voice notes / images, processed by the agent's
+    # audio/image capabilities before reaching the model.
+    media_kind: str | None = Field(default=None, pattern=r"^(image|audio|video)$")
+    media_base64: str | None = None
+    media_mime: str | None = Field(default=None, max_length=100)
+    # External id of the message the visitor replied to (swipe-to-reply).
+    quoted_external_id: str | None = Field(default=None, max_length=255)
+
+
+class WhatsAppInboundReaction(BaseModel):
+    remote_jid: str = Field(min_length=1, max_length=255)
+    # External id of the message the visitor reacted to.
+    target_external_id: str = Field(min_length=1, max_length=255)
+    # Empty string removes the reaction.
+    emoji: str = Field(default="", max_length=16)
+
+
+class WhatsAppInboundResult(BaseModel):
+    accepted: bool
+    reply: str | None = None
+    conversation_id: uuid.UUID | None = None
+    mode: str | None = None
+    outbound_message_id: uuid.UUID | None = None
+    # External id of the visitor message the reply quotes (swipe-to-reply).
+    quote_external_id: str | None = None
+
+
+class WhatsAppOutboundConfirm(BaseModel):
+    message_id: uuid.UUID
+    external_message_id: str = Field(min_length=1, max_length=255)
+
+
+class WhatsAppOutgoing(BaseModel):
+    external_message_id: str = Field(min_length=1, max_length=255)
+    remote_jid: str = Field(min_length=1, max_length=255)
+    text: str = Field(default="", max_length=100000)
+    media_kind: str | None = Field(default=None, pattern=r"^(image|audio|video|sticker|document|other)$")
+    occurred_at: datetime | None = None
+
+    @field_validator("occurred_at")
+    @classmethod
+    def aware_timestamp(cls, value):
+        if value is not None and value.utcoffset() is None:
+            raise ValueError("The message timestamp must include a timezone")
+        return value
+
+
+class ConversationReportRow(BaseModel):
+    """One conversation in the reports list: state, who handled it, timing
+    and counts. No message content."""
+
+    id: uuid.UUID
+    created_at: datetime
+    status: str
+    resolved_at: datetime | None = None
+    archived_at: datetime | None = None
+    mode: str
+    channel: str
+    client_id: uuid.UUID | None = None
+    client_name: str | None = None
+    agent_id: uuid.UUID | None = None
+    agent_name: str | None = None
+    contact_id: uuid.UUID | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
+    assignee_id: uuid.UUID | None = None
+    assignee_name: str | None = None
+    team_id: uuid.UUID | None = None
+    team_name: str | None = None
+    first_reply_at: datetime | None = None
+    taken_over_at: datetime | None = None
+    first_reply_s: float | None = None
+    resolution_s: float | None = None
+    inbound: int = 0
+    ai_replies: int = 0
+    human_replies: int = 0
+    last_message_at: datetime | None = None
+    # The ad referral the case started from, as stored: one string per key.
+    acquisition: dict[str, str] | None = None
+
+
+class ConversationReportSummary(BaseModel):
+    conversations: int = 0
+    contacts: int = 0
+    new_contacts: int = 0
+    ai_resolved: int = 0
+    ai_resolved_pct: float = 0.0
+    handoffs: int = 0
+    open: int = 0
+    unanswered: int = 0
+    first_reply_s: float | None = None
+    resolution_s: float | None = None
+    human_wait_s: float | None = None
+
+
+class ConversationReportPage(BaseModel):
+    items: list[ConversationReportRow]
+    total: int
+    summary: ConversationReportSummary
+
+
+class ConversationFacetValue(BaseModel):
+    value: str
+    count: int
+
+
+class ConversationFacet(BaseModel):
+    key: str
+    values: list[ConversationFacetValue]
+
+
+class ConversationFacets(BaseModel):
+    with_ad: int
+    without_ad: int
+    facets: list[ConversationFacet]

@@ -1,0 +1,290 @@
+"""Chat completions over raw HTTP against an OpenAI-compatible endpoint.
+
+Every model is reached through the same ``/chat/completions`` dialect, which
+is what OpenRouter speaks for all vendors. The usage block it returns carries
+the cost of the call, so a reply knows what it cost without a price table.
+"""
+
+import logging
+from dataclasses import dataclass, field
+
+import httpx
+from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
+
+
+# Attribution headers OpenRouter reads to label the app in its logs.
+APP_HEADERS = {"HTTP-Referer": "https://github.com/sarrazola/openlivery", "X-Title": "OpenLivery"}
+
+
+@dataclass
+class Usage:
+    """Token and cost accounting for one or more provider calls."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_tokens: int = 0
+    reasoning_tokens: int = 0
+    # USD as the provider reported it; None when it did not say.
+    cost_usd: float | None = None
+
+    def __add__(self, other: "Usage") -> "Usage":
+        cost = None if self.cost_usd is None and other.cost_usd is None else (self.cost_usd or 0.0) + (other.cost_usd or 0.0)
+        return Usage(
+            self.input_tokens + other.input_tokens,
+            self.output_tokens + other.output_tokens,
+            self.cached_tokens + other.cached_tokens,
+            self.reasoning_tokens + other.reasoning_tokens,
+            cost,
+        )
+
+
+@dataclass
+class Completion:
+    text: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    # Set by the tool loop: [{name, arguments, result_preview, is_error}].
+    tool_calls: list[dict] | None = None
+    # What the reply cost in USD, summed across tool-loop rounds; None when the
+    # provider reported no cost.
+    cost_usd: float | None = None
+    cached_tokens: int = 0
+    reasoning_tokens: int = 0
+    # The upstream vendor that actually served the request, when the router names it.
+    served_by: str = ""
+    # Wall-clock time the whole completion took (tool rounds included); set
+    # by run_completion.
+    duration_ms: int | None = None
+    # The router's id for the call, to read its record later when the
+    # response left the cost out (speech-to-text does).
+    generation_id: str = ""
+    # Files an HTTP tool returned during the loop (list[tool_files.ToolFile]).
+    # Their bytes never entered the model context; the channel layer delivers
+    # them as attachments after the text reply.
+    attachments: list = field(default_factory=list)
+
+
+# Substrings in a provider's 400 error that mean a sampling parameter is not
+# accepted (e.g. reasoning models that refuse temperature). When seen, we retry
+# once without those params.
+_SAMPLING_PARAM_HINTS = ("temperature", "max_tokens", "max_output_tokens", "max_completion_tokens", "unsupported", "not supported")
+
+
+async def chat_completion(
+    provider: str,
+    base_url: str,
+    api_key: str,
+    model: str,
+    messages: list[dict[str, str]],
+    *,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> Completion:
+    """Generate a reply through ``{base_url}/chat/completions``.
+
+    ``provider`` names the registry entry the credentials came from; every
+    supported provider speaks the same dialect, so it does not change the call.
+    """
+    try:
+        return await _chat_completions(base_url, api_key, model, messages, temperature, max_tokens)
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, KeyError, ValueError, IndexError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not get a valid response from the AI provider. Check the API key and the model.",
+        ) from exc
+
+
+def chat_url(base_url: str) -> str:
+    return f"{base_url.rstrip('/')}/chat/completions"
+
+
+def auth_headers(api_key: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", **APP_HEADERS}
+
+
+def sampling_params(temperature: float | None, max_tokens: int | None) -> dict:
+    sampling: dict = {}
+    if temperature is not None:
+        sampling["temperature"] = temperature
+    if max_tokens is not None:
+        sampling["max_tokens"] = max_tokens
+    return sampling
+
+
+async def _chat_completions(base_url, api_key, model, messages, temperature, max_tokens) -> Completion:
+    payload = {
+        "model": model,
+        "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
+        # Ask OpenRouter to price the call in the response, so the usage record
+        # carries the real charge instead of waiting on a reconcile.
+        "usage": {"include": True},
+    }
+    data = await post_completion(chat_url(base_url), auth_headers(api_key), payload, sampling_params(temperature, max_tokens))
+    return completion_from(extract_chat_text(data), read_usage(data), data)
+
+
+def is_synthetic_reply(data: dict) -> bool:
+    """A 200 that carries text but no usage and no tool calls was not
+    generated by the model: the router or the vendor answered in its place
+    (a canned refusal, typically). Seen on OpenRouter with OpenAI models on
+    otherwise ordinary turns; the same request succeeds when repeated."""
+    try:
+        message = chat_message(data)
+    except (KeyError, IndexError, TypeError):
+        return False
+    if message.get("tool_calls"):
+        return False
+    usage = read_usage(data)
+    if usage.input_tokens > 0 or usage.output_tokens > 0:
+        return False
+    content = message.get("content")
+    if isinstance(content, list):
+        content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
+    return bool((content or "").strip())
+
+
+def _log_synthetic(data: dict, attempt: int) -> None:
+    choice = (data.get("choices") or [{}])[0] if isinstance(data.get("choices"), list) else {}
+    logger.warning(
+        "Synthetic completion (attempt %d): provider=%s id=%s finish_reason=%s native_finish_reason=%s error=%s choice_error=%s content=%r",
+        attempt, data.get("provider"), data.get("id"), choice.get("finish_reason"), choice.get("native_finish_reason"),
+        data.get("error"), choice.get("error"), str(chat_message(data).get("content") or "")[:120],
+    )
+
+
+async def post_completion(url: str, headers: dict, base_payload: dict, sampling: dict, post=None) -> dict:
+    """``_post_json`` plus one retry when the answer was not a generation.
+    ``post`` lets a caller route through its own transport (the tool loop
+    passes the one its tests stub)."""
+    post = post or _post_json
+    data = await post(url, headers, base_payload, sampling)
+    if is_synthetic_reply(data):
+        _log_synthetic(data, 1)
+        retry = await post(url, headers, base_payload, sampling)
+        if is_synthetic_reply(retry):
+            _log_synthetic(retry, 2)
+        return retry
+    return data
+
+
+def completion_from(text: str, usage: Usage, data: dict, tool_calls: list[dict] | None = None) -> Completion:
+    return Completion(
+        text,
+        usage.input_tokens,
+        usage.output_tokens,
+        tool_calls=tool_calls,
+        cost_usd=usage.cost_usd,
+        cached_tokens=usage.cached_tokens,
+        reasoning_tokens=usage.reasoning_tokens,
+        served_by=str(data.get("provider") or ""),
+        generation_id=str(data.get("id") or ""),
+    )
+
+
+def read_usage(data: dict) -> Usage:
+    """The usage block of a chat completion, cost included.
+
+    OpenRouter reports ``cost`` (what it charges) and, for requests served
+    through a key the account brought itself, ``upstream_inference_cost`` (what
+    the vendor charged). The real cost of the call is the two together.
+    """
+    usage = data.get("usage") or {}
+    prompt_details = usage.get("prompt_tokens_details") or {}
+    completion_details = usage.get("completion_tokens_details") or {}
+    cost_details = usage.get("cost_details") or {}
+    cost = usage.get("cost")
+    upstream = cost_details.get("upstream_inference_cost")
+    cost_usd = None if cost is None and upstream is None else float(cost or 0) + float(upstream or 0)
+    if not cost and upstream is None:
+        # Nothing charged by the router and no vendor charge reported: served
+        # through the account's own vendor key (speech-to-text reports it this
+        # way, without even the BYOK flag). The cost is unknown, not zero, so
+        # Reports prices it from the catalog instead.
+        cost_usd = None
+    return Usage(
+        # Chat completions report prompt/completion tokens; the audio endpoint
+        # reports input/output tokens.
+        input_tokens=int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0),
+        output_tokens=int(usage.get("completion_tokens") or usage.get("output_tokens") or 0),
+        cached_tokens=int(prompt_details.get("cached_tokens") or 0),
+        reasoning_tokens=int(completion_details.get("reasoning_tokens") or 0),
+        cost_usd=cost_usd,
+    )
+
+
+async def _post_json(url: str, headers: dict, base_payload: dict, sampling: dict) -> dict:
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(url, headers=headers, json={**base_payload, **sampling})
+        if sampling and response.status_code >= 400 and _is_sampling_param_error(response):
+            response = await client.post(url, headers=headers, json=base_payload)
+    if response.status_code >= 400:
+        raise HTTPException(status_code=502, detail=f"The AI provider responded with an error: {_safe_provider_error(response)}")
+    return response.json()
+
+
+def chat_message(data: dict) -> dict:
+    """The assistant message of a chat completion (first choice)."""
+    return data["choices"][0].get("message") or {}
+
+
+def extract_chat_text(data: dict) -> str:
+    """Pull the assistant text out of a chat completion result."""
+    content = chat_message(data).get("content")
+    if isinstance(content, list):
+        # Some vendors answer with content parts instead of a plain string.
+        content = "".join(part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text")
+    text = (content or "").strip()
+    if not text:
+        raise ValueError("empty response")
+    return text
+
+
+def _is_sampling_param_error(response: httpx.Response) -> bool:
+    message = _safe_provider_error(response).lower()
+    # "requires more credits, or fewer max_tokens" is a balance problem, not a
+    # parameter the model rejects; retrying without a cap only inflates it.
+    if "credits" in message:
+        return False
+    return any(hint in message for hint in _SAMPLING_PARAM_HINTS)
+
+
+def _safe_provider_error(response: httpx.Response) -> str:
+    try:
+        data = response.json()
+        message = data.get("error", {}).get("message") or data.get("message")
+        if isinstance(message, str):
+            return message[:500]
+    except ValueError:
+        pass
+    return f"HTTP {response.status_code}"
+
+
+async def test_provider(provider: str, base_url: str, api_key: str) -> dict:
+    """Verify a key by asking the provider about it.
+
+    ``GET {base_url}/key`` needs a valid key and describes it (OpenRouter's
+    model list is public, so listing models would accept any string).
+    """
+    url = f"{base_url.rstrip('/')}/key"
+    try:
+        async with httpx.AsyncClient(timeout=25) as client:
+            response = await client.get(url, headers={"Authorization": f"Bearer {api_key}", **APP_HEADERS})
+        if response.status_code < 400:
+            try:
+                info = response.json().get("data") or {}
+            except (ValueError, AttributeError):
+                info = {}
+            remaining = info.get("limit_remaining")
+            message = "Key verified."
+            if isinstance(remaining, (int, float)):
+                message = f"Key verified. Remaining credit: ${remaining:,.2f}."
+            return {"ok": True, "message": message, "models": []}
+        raise HTTPException(status_code=502, detail=f"Could not verify the key: {_safe_provider_error(response)}")
+    except HTTPException:
+        raise
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Could not connect to the provider") from exc
