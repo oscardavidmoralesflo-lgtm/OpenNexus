@@ -91,6 +91,11 @@ class Settings(BaseSettings):
     # portal's sign-in page and under Preferences. Empty shows nothing.
     portal_ios_app_url: str = ""
     portal_android_app_url: str = ""
+    # What a client's own portal domain must point at on this deployment: the
+    # host its gateway answers on, e.g. "app.youragency.com". The client page
+    # shows it as the value of the CNAME record; empty shows a placeholder and
+    # the note that the multi-domain gateway has to be enabled first.
+    portal_domain_cname_target: str = ""
 
     # Workspace domains. With a base domain set (e.g. "app.example.com", a
     # wildcard DNS record pointing at the gateway), the agency is also served
