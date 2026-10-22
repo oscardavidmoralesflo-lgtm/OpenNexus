@@ -258,6 +258,7 @@ export default function ReportsPage() {
       </>
     ) : (
       !report ? null : <>
+        {Boolean(report.totals.unpriced_replies) && <p className="security-note">{t("reports.unpricedNote", { count: report.totals.unpriced_replies ?? 0 })}</p>}
         <section className="metrics-grid">
           <article className="metric-card"><span className="metric-icon green"><Coins size={20} /></span><div><small>{t("reports.tiles.cost")}</small><strong>{money(report.totals.cost_usd)}</strong><p>{t("reports.tiles.costHint", { replies: fmtInt(report.totals.replies) })}</p></div></article>
           <article className="metric-card"><span className="metric-icon blue"><Bot size={20} /></span><div><small>{t("reports.tiles.avg")}</small><strong>{money(report.totals.avg_cost_per_reply_usd)}</strong><p>{t("reports.tiles.avgHint", { tokens: fmtInt(report.totals.input_tokens + report.totals.output_tokens) })}</p></div></article>
@@ -302,7 +303,7 @@ export default function ReportsPage() {
                   <td>{row.served_by || "—"}</td>
                   <td>{row.duration_ms == null ? "—" : `${(row.duration_ms / 1000).toFixed(row.duration_ms < 10_000 ? 1 : 0)} s`}</td>
                   <td>{fmtInt(row.input_tokens)}</td><td>{fmtInt(row.output_tokens)}</td>
-                  <td><strong>{money(row.cost_usd)}</strong>{row.estimated && <small className="muted"> · {t("reports.estimatedMark")}</small>}</td>
+                  <td><strong>{row.cost_unknown ? t("reports.unknown") : money(row.cost_usd)}</strong>{row.estimated && <small className="muted"> · {t("reports.estimatedMark")}</small>}</td>
                 </tr>
               ))}</tbody>
             </table></div>

@@ -120,8 +120,8 @@ _AGGREGATES = (
     func.coalesce(func.sum(UsageRecord.input_tokens), 0),
     func.coalesce(func.sum(UsageRecord.output_tokens), 0),
     func.sum(UsageRecord.cost_usd),
-    func.sum(UsageRecord.input_tokens).filter(UsageRecord.cost_usd.is_(None)),
-    func.sum(UsageRecord.output_tokens).filter(UsageRecord.cost_usd.is_(None)),
+    func.sum(UsageRecord.input_tokens).filter(UsageRecord.cost_usd.is_(None), UsageRecord.provider == "openrouter"),
+    func.sum(UsageRecord.output_tokens).filter(UsageRecord.cost_usd.is_(None), UsageRecord.provider == "openrouter"),
 )
 
 
@@ -169,6 +169,10 @@ def cost_report(
     replies = sum(entry["replies"] for entry in by_model)
     cost = sum((Decimal(str(entry["cost_usd"])) for entry in by_model), Decimal(0))
     conversations = db.scalar(filters.apply(_joined(select(func.count(func.distinct(UsageRecord.conversation_id)))))) or 0
+    unpriced = db.scalar(filters.apply(_joined(select(func.count(UsageRecord.id)))).where(
+        UsageRecord.cost_usd.is_(None), UsageRecord.provider != "openrouter",
+    )) or 0
+    priced_replies = replies - unpriced
 
     days: dict = {}
     for row in _grouped(db, filters, cast(func.timezone(zone, UsageRecord.created_at), Date)):
@@ -180,11 +184,12 @@ def cost_report(
     return {
         "totals": {
             "cost_usd": _money(cost),
+            "unpriced_replies": int(unpriced),
             "replies": replies,
             "conversations": int(conversations),
             "input_tokens": sum(entry["input_tokens"] for entry in by_model),
             "output_tokens": sum(entry["output_tokens"] for entry in by_model),
-            "avg_cost_per_reply_usd": _money(cost / replies) if replies else 0.0,
+            "avg_cost_per_reply_usd": _money(cost / priced_replies) if priced_replies else 0.0,
         },
         "by_client": _fold(_grouped(db, filters, Conversation.client_id, Client.name), 2,
                            lambda key: (str(key[0]) if key[0] else None, key[1] or "")),
@@ -207,8 +212,11 @@ def _replies_query(filters: Filters):
 
 def _reply(row) -> dict:
     record, contact_name, channel, client_id, client_name, agent_name, tool_calls = row
+    cost_unknown = record.cost_usd is None and record.provider != "openrouter"
     if record.cost_usd is not None:
         cost, estimated = Decimal(record.cost_usd), False
+    elif cost_unknown:
+        cost, estimated = Decimal(0), False
     else:
         cost, estimated = _estimated_cost(record.model, record.input_tokens, record.output_tokens), True
     calls = tool_calls or []
@@ -229,6 +237,7 @@ def _reply(row) -> dict:
         "cached_tokens": record.cached_tokens,
         "reasoning_tokens": record.reasoning_tokens,
         "cost_usd": _money(cost),
+        "cost_unknown": cost_unknown,
         "estimated": estimated,
         "duration_ms": record.duration_ms,
         "tools": len(calls),
@@ -265,7 +274,7 @@ def replies(
             writer.writerow([
                 item["created_at"].isoformat(), item["id"], item["conversation_id"] or "", item["contact_name"] or "",
                 item["client_name"] or "", item["agent_name"] or "", item["channel"] or "", item["model"], item["served_by"],
-                item["input_tokens"], item["output_tokens"], f"{item['cost_usd']:.8f}", "yes" if item["estimated"] else "",
+                item["input_tokens"], item["output_tokens"], "" if item["cost_unknown"] else f"{item['cost_usd']:.8f}", "yes" if item["estimated"] else "",
                 item["duration_ms"] if item["duration_ms"] is not None else "",
             ])
         return Response(content=buffer.getvalue(), media_type="text/csv",

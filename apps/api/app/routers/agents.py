@@ -524,19 +524,21 @@ def set_humanization(agent_id: uuid.UUID, payload: HumanizationConfig, db: Sessi
 async def preview_voice(agent_id: uuid.UUID, payload: VoicePreviewIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Speak a sample with a voice before turning voice notes on. Billed like any reply."""
     from ..services import humanize
-    from ..services.providers import resolve_agent_credentials
+    from ..services.providers import resolve_model_credentials
     from ..services.usage import record_usage, schedule_generation_reconcile
 
     agent = _agent(db, user, agent_id)
-    credentials = resolve_agent_credentials(db, agent)
-    if not credentials:
-        raise HTTPException(status_code=409, detail="Add an AI provider key in Settings to try voices")
-    model = payload.voice_model.strip() or agent.voice_model or humanize.DEFAULT_VOICE_MODEL
+    requested_model = payload.voice_model.strip() or agent.voice_model or humanize.DEFAULT_VOICE_MODEL
+    resolved = resolve_model_credentials(db, agent.agency_id, requested_model)
+    if not resolved:
+        raise HTTPException(status_code=409, detail="Add a matching AI provider key in Settings to try this voice")
+    voice_provider, base_url, api_key, model = resolved
+    credentials = (base_url, api_key)
     try:
         audio, mime, usage = await humanize.synthesize(*credentials, model, payload.voice_name.strip() or agent.voice_name, payload.text)
     except Exception as exc:  # noqa: BLE001 - the provider's message helps pick another voice
         raise HTTPException(status_code=502, detail=f"The voice could not be generated: {str(exc)[:300]}") from exc
-    record = record_usage(db, agent.agency_id, agent.id, agent.provider, model, usage, purpose="voice")
+    record = record_usage(db, agent.agency_id, agent.id, voice_provider, model, usage, purpose="voice")
     db.commit()
     schedule_generation_reconcile(record, usage, *credentials)
     return Response(content=audio, media_type=mime or "audio/ogg", headers={"Cache-Control": "no-store"})

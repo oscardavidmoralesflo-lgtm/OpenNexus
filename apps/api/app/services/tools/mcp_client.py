@@ -44,7 +44,18 @@ async def discover_mcp_tools(url: str, transport: str, headers: dict[str, str] |
 
     async def _discover() -> list[dict]:
         async with open_mcp_session(url, transport, headers) as session:
-            result = await session.list_tools()
+            collected = []
+            cursor = None
+            seen = set()
+            while True:
+                result = await session.list_tools(cursor=cursor) if cursor else await session.list_tools()
+                collected.extend(result.tools)
+                cursor = result.nextCursor
+                if not cursor:
+                    break
+                if cursor in seen or len(seen) >= 100:
+                    raise ValueError("Invalid MCP pagination")
+                seen.add(cursor)
             return [
                 {
                     "name": tool.name,
@@ -56,7 +67,7 @@ async def discover_mcp_tools(url: str, transport: str, headers: dict[str, str] |
                     "destructive": getattr(tool.annotations, "destructiveHint", None) is True
                     and getattr(tool.annotations, "readOnlyHint", None) is not True,
                 }
-                for tool in result.tools
+                for tool in collected
             ]
 
     return await asyncio.wait_for(_discover(), CONNECT_TIMEOUT_SECONDS)

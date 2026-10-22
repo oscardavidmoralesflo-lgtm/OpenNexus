@@ -28,7 +28,7 @@ from .notifications import notify_needs_human
 from .routing import route_new_conversation_by_tags
 from .model_catalog import DEFAULT_AUDIO_MODEL
 from .availability import on_duty
-from .providers import DEFAULT_PROVIDER, resolve_agent_credentials, resolve_provider_credentials
+from .providers import DEFAULT_PROVIDER, resolve_agent_credentials, resolve_model_credentials
 from .tools import run_completion
 from .usage import record_usage, schedule_generation_reconcile
 from .capture import apply_captures, build_capture_spec, capture_context, field_definitions
@@ -112,26 +112,26 @@ async def resolve_inbound_content(
     enabled = (inbound.media_kind == "image" and agent.image_enabled) or (
         inbound.media_kind == "audio" and agent.audio_enabled
     )
-    credentials = resolve_provider_credentials(db, agent.agency_id, DEFAULT_PROVIDER)
+    requested_model = (agent.image_model.strip() or agent.model.strip()) if inbound.media_kind == "image" else (agent.audio_model.strip() or DEFAULT_AUDIO_MODEL)
+    preferred = agent.provider if inbound.media_kind == "image" and not agent.image_model.strip() else DEFAULT_PROVIDER
+    credentials = resolve_model_credentials(db, agent.agency_id, requested_model, preferred=preferred)
     if not enabled or not credentials:
         return text, text or _media_placeholder(inbound.media_kind)
     try:
         data = inbound.media_bytes
-        base_url, api_key = credentials
+        media_provider, base_url, api_key, model = credentials
         if inbound.media_kind == "image":
-            model = agent.image_model.strip() or agent.model.strip()
             instruction = (
                 "Describe con detalle el contenido de esta imagen para que un asistente pueda responder al cliente."
                 + (f" El cliente escribió: {text}" if text else "")
             )
             described = await describe_image(base_url, api_key, model, data, inbound.media_mime or "image/jpeg", instruction)
-            record = record_usage(db, agent.agency_id, agent.id, DEFAULT_PROVIDER, model, described, conversation=conversation, message=message)
+            record = record_usage(db, agent.agency_id, agent.id, media_provider, model, described, conversation=conversation, message=message)
             schedule_generation_reconcile(record, described, base_url, api_key)
             return text, (f"{text}\n\n" if text else "") + f"[Imagen recibida] {described.text}"
-        model = agent.audio_model.strip() or DEFAULT_AUDIO_MODEL
         mime = inbound.media_mime or "audio/ogg"
         transcribed = await transcribe_audio(base_url, api_key, model, data, audio_filename(mime), mime)
-        record = record_usage(db, agent.agency_id, agent.id, DEFAULT_PROVIDER, model, transcribed, conversation=conversation, message=message)
+        record = record_usage(db, agent.agency_id, agent.id, media_provider, model, transcribed, conversation=conversation, message=message)
         schedule_generation_reconcile(record, transcribed, base_url, api_key)
         return text, (f"{text}\n\n" if text else "") + (transcribed.text or _media_placeholder("audio"))
     except (HTTPException, ValueError):
@@ -758,10 +758,12 @@ async def _deliver_humanized(db: Session, channel, conversation: Conversation, r
 
     if outbound is not None and humanize.wants_voice(agent, burst):
         spoken = humanize.speakable(result.reply)
-        credentials = resolve_agent_credentials(db, agent)
+        voice_model = (agent.voice_model or humanize.DEFAULT_VOICE_MODEL).strip()
+        resolved_voice = resolve_model_credentials(db, agent.agency_id, voice_model)
+        credentials = (resolved_voice[1], resolved_voice[2]) if resolved_voice else None
         if spoken and credentials:
             try:
-                audio, mime, usage = await humanize.synthesize(*credentials, agent.voice_model, agent.voice_name, spoken)
+                audio, mime, usage = await humanize.synthesize(*credentials, resolved_voice[3], agent.voice_name, spoken)
             except Exception:  # noqa: BLE001 - a voice that fails falls back to text
                 audio = None
             if audio:
@@ -770,8 +772,8 @@ async def _deliver_humanized(db: Session, channel, conversation: Conversation, r
                 external_id = await send_channel_media(db, conversation, kind="audio", data=audio, mime=mime, filename="voice-note.ogg")
                 store_attachment(db, outbound, data=audio, mime=mime, kind="audio")
                 outbound.external_message_id = external_id
-                record = record_usage(db, agent.agency_id, agent.id, agent.provider,
-                                      (agent.voice_model or humanize.DEFAULT_VOICE_MODEL).strip(), usage,
+                record = record_usage(db, agent.agency_id, agent.id, resolved_voice[0],
+                                      resolved_voice[3], usage,
                                       conversation=conversation, purpose="voice")
                 db.commit()
                 schedule_generation_reconcile(record, usage, *credentials)

@@ -360,6 +360,23 @@ class AgentTool(Base):
     agent: Mapped[Agent] = relationship(back_populates="tools")
 
 
+class ManagedIntegration(Base):
+    """An agent-scoped external account. OAuth tokens stay at Composio."""
+
+    __tablename__ = "managed_integrations"
+    __table_args__ = (UniqueConstraint("agent_id", "toolkit", name="uq_managed_integrations_agent_toolkit"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    toolkit: Mapped[str] = mapped_column(String(100))
+    auth_config_id: Mapped[str] = mapped_column(String(180))
+    account_id: Mapped[str] = mapped_column(String(180))
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    tool_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agent_tools.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
 class WhatsAppChannel(Base):
     """A WhatsApp number linked by QR. A client can have several, each bound to
     an agent (the same agent may answer more than one)."""

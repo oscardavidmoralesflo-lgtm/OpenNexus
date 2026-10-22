@@ -22,6 +22,7 @@ from .routers import (
     dashboard,
     domains,
     industries,
+    integrations,
     mcp,
     mobile,
     portal,
@@ -127,6 +128,7 @@ app.include_router(industries.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(webchat.router, prefix="/api")
 app.include_router(agent_tools.router, prefix="/api")
+app.include_router(integrations.router, prefix="/api")
 app.include_router(providers.router, prefix="/api")
 app.include_router(catalog.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")

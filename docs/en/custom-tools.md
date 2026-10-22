@@ -4,6 +4,19 @@
 
 Custom tools let an agent act, not just answer. From the **Integrations** tab of the agent editor you can connect two kinds of tools, and the agent decides when to call them during a conversation: **HTTP tools** (an endpoint of your own or any REST API) and **MCP servers** (external services that speak the Model Context Protocol). Tools work on every channel: the playground, the web widget and WhatsApp.
 
+## Managed app integrations
+
+The agent's Integrations tab also includes a directory of 157 services, with search, category filters and a connected-accounts filter. A directory entry is not an active connection; service availability and authentication depend on your Composio project.
+
+1. An owner or admin opens **Settings → Integrations** and verifies a Composio project API key. The key is encrypted at rest. Replacements should belong to the same Composio project as existing connections.
+2. In an agent's **Integrations** tab, choose **Connect account**, then open the authorization page and authorize the intended account. Composio stores and refreshes its OAuth tokens. Share authorization links only with the account owner.
+3. Return and choose **Check connection**. OpenNexus verifies the account scope and active state, creates a session restricted to that agent's single toolkit and account, and discovers its app tools.
+4. Choose **Review tools**, select permitted actions and save. Enable the attached connection in **Custom tools** when it is ready. New managed connections start paused with no tools selected.
+
+Use **Disconnect** in the directory to remove the attached tools and request account deletion and upstream credential revocation. If the external service fails, the local tools are still paused; retry to finish removal. Managed service URLs and credentials cannot be changed in the manual MCP editor. Use the service settings to rotate the project key.
+
+Composio processes these tool calls and may charge separately from AI inference. Its service costs are not part of the AI usage report. HTTP and MCP tools remain available without Composio. Some toolkits require additional authentication configuration in the Composio dashboard.
+
 ## HTTP tools
 
 An HTTP tool describes one endpoint the agent may call:
@@ -30,7 +43,7 @@ Once the tools are listed you choose which ones the agent may call. Every tool i
 
 ## How tool calling works
 
-When an agent with enabled tools receives a message, OpenNexus sends the tool definitions to the model along with the conversation. If the model decides to call a tool, OpenNexus executes it (the HTTP request, or a call proxied to the MCP server), feeds the result back, and lets the model continue — up to **5 rounds** per reply, after which the model must answer with text. Tools travel as chat-completions function definitions, which is what OpenRouter speaks for every vendor, so any tool-capable model works. Token usage and cost across all rounds are summed into the reply's usage record.
+When an agent with enabled tools receives a message, OpenNexus sends the tool definitions to the model along with the conversation. If the model decides to call a tool, OpenNexus executes it (the HTTP request, or a call proxied to the MCP server), feeds the result back, and lets the model continue — up to **5 rounds** per reply, after which the model must answer with text. Tools travel as chat-completions function definitions through the selected AI provider, so use a model that supports tool calling. Token usage and cost across all rounds are summed into the reply's usage record.
 
 Every assistant reply stores which tools ran, with their arguments and a preview of each result. In the playground you will see a chip under the reply listing the tools used; failed calls are highlighted and show the error detail, so you can diagnose a broken tool without reading logs.
 

@@ -6,6 +6,7 @@ consecutive underscores, so the "__" separator is unambiguous.
 """
 
 import re
+import hashlib
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -70,6 +71,10 @@ def build_tool_specs(tools: list[AgentTool]) -> list[ToolSpec]:
             if allowed is not None and mcp_name not in allowed:
                 continue
             composite = f"{tool.name}__{mcp_name}"
+            # Some managed tools have long native slugs. Keep dispatching with
+            # the original name while exposing a stable, provider-sized alias.
+            if len(composite) > 64 and re.fullmatch(r"[a-zA-Z0-9_-]+", composite):
+                composite = composite[:51] + "_" + hashlib.sha256(composite.encode()).hexdigest()[:12]
             if not PROVIDER_NAME_RE.match(composite):
                 continue
             specs.append(

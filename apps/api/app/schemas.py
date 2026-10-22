@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 
 from .services.capture import CAPTURE_CHANNELS, FIELD_KEY_PATTERN, FIELD_KINDS
 from .services.model_catalog import DEFAULT_AUDIO_MODEL, DEFAULT_EMBEDDING_MODEL
+from .services.providers import PROVIDER_PATTERN
 
 # OpenRouter slug: "vendor/model", optionally with a ":variant" suffix.
 MODEL_SLUG_PATTERN = r"^[a-z0-9-]+/[A-Za-z0-9._-]+(?::[a-z0-9-]+)?$"
@@ -277,7 +278,7 @@ class AgentBase(BaseModel):
     brief_dos: str = ""
     brief_donts: str = ""
     model: str = ""
-    provider: str = Field(default="openrouter", pattern=r"^(openrouter)$")
+    provider: str = Field(default="openrouter", pattern=PROVIDER_PATTERN)
     prompt_language: str = Field(default="es", pattern=r"^(en|es)$")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=1, le=32000)
@@ -317,7 +318,7 @@ class AgentUpdate(BaseModel):
     brief_dos: str | None = None
     brief_donts: str | None = None
     model: str | None = None
-    provider: str | None = Field(default=None, pattern=r"^(openrouter)$")
+    provider: str | None = Field(default=None, pattern=PROVIDER_PATTERN)
     prompt_language: str | None = Field(default=None, pattern=r"^(en|es)$")
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1, le=32000)
@@ -1183,6 +1184,7 @@ class ModelUsage(BaseModel):
 
 class ReportTotals(BaseModel):
     cost_usd: float
+    unpriced_replies: int = 0
     replies: int
     conversations: int
     input_tokens: int
@@ -1231,6 +1233,7 @@ class ReportReply(BaseModel):
     cached_tokens: int
     reasoning_tokens: int
     cost_usd: float
+    cost_unknown: bool = False
     # True when the provider reported no cost and the catalog's list price
     # was used instead.
     estimated: bool

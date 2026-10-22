@@ -7,6 +7,7 @@ the cost of the call, so a reply knows what it cost without a price table.
 
 import logging
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import HTTPException
@@ -217,10 +218,23 @@ def read_usage(data: dict) -> Usage:
 
 
 async def _post_json(url: str, headers: dict, base_payload: dict, sampling: dict) -> dict:
+    # Router-only extensions cause strict direct APIs to reject valid requests.
+    payload = dict(base_payload)
+    sampling = dict(sampling)
+    host = urlsplit(url).hostname or ""
+    if "openrouter." not in host:
+        payload.pop("usage", None)
+    if host == "api.openai.com" and str(payload.get("model", "")).startswith(("gpt-5", "gpt-6", "o1", "o3", "o4")):
+        if "max_tokens" in sampling:
+            sampling["max_completion_tokens"] = sampling.pop("max_tokens")
     async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(url, headers=headers, json={**base_payload, **sampling})
+        response = await client.post(url, headers=headers, json={**payload, **sampling})
         if sampling and response.status_code >= 400 and _is_sampling_param_error(response):
-            response = await client.post(url, headers=headers, json=base_payload)
+            # Retain the output budget when a reasoning model refuses temperature.
+            message = _safe_provider_error(response).lower()
+            if "temperature" in message and "temperature" in sampling:
+                sampling.pop("temperature")
+                response = await client.post(url, headers=headers, json={**payload, **sampling})
     if response.status_code >= 400:
         raise HTTPException(status_code=502, detail=f"The AI provider responded with an error: {_safe_provider_error(response)}")
     return response.json()
@@ -269,6 +283,9 @@ async def test_provider(provider: str, base_url: str, api_key: str) -> dict:
     ``GET {base_url}/key`` needs a valid key and describes it (OpenRouter's
     model list is public, so listing models would accept any string).
     """
+    if provider != "openrouter":
+        models = await provider_models(provider, base_url, api_key)
+        return {"ok": True, "message": "Key verified.", "models": models}
     url = f"{base_url.rstrip('/')}/key"
     try:
         async with httpx.AsyncClient(timeout=25) as client:
@@ -288,3 +305,28 @@ async def test_provider(provider: str, base_url: str, api_key: str) -> dict:
         raise
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="Could not connect to the provider") from exc
+
+
+async def provider_models(provider: str, base_url: str, api_key: str) -> list[str]:
+    """Authenticated discovery without generating text or spending model credit."""
+    headers = {"Authorization": f"Bearer {api_key}"}
+    if provider == "anthropic":
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(f"{base_url.rstrip('/')}/models", headers=headers)
+        if response.status_code >= 400:
+            raise HTTPException(status_code=502, detail=f"Could not verify the key: {_safe_provider_error(response)}")
+        data = response.json()
+        rows = data if isinstance(data, list) else data.get("data")
+        if not isinstance(rows, list):
+            raise ValueError("Invalid model list")
+        excluded = ("embed", "whisper", "transcri", "tts", "dall-e", "moderation", "rerank", "sora", "image", "audio", "speech")
+        return sorted({row["id"] for row in rows if isinstance(row, dict) and isinstance(row.get("id"), str)
+                       and not any(term in row["id"].lower() for term in excluded)
+                       and row.get("type") not in ("embedding", "image", "audio", "video", "rerank")
+                       and (not isinstance(row.get("capabilities"), dict) or row["capabilities"].get("completion_chat", True))})
+    except HTTPException:
+        raise
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=502, detail="Could not read a valid model list from the provider") from exc

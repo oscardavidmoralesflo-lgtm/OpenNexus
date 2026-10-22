@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { setLiveModels, type LiveModel } from "@/lib/providers";
+import type { Provider } from "@/types";
 
 export type AvailableModels = {
   chat: Record<string, string[]>;
@@ -16,11 +17,10 @@ export type AvailableModels = {
   embedding?: string[];
 };
 
-let cached: AvailableModels | null = null;
 let metadataLoaded = false;
 
 export function useAvailableModels(): AvailableModels | null {
-  const [data, setData] = useState<AvailableModels | null>(cached);
+  const [data, setData] = useState<AvailableModels | null>(null);
   useEffect(() => {
     // Names, context windows and prices for every model on offer, so the
     // pickers can label what they list.
@@ -28,11 +28,20 @@ export function useAvailableModels(): AvailableModels | null {
       metadataLoaded = true;
       api<LiveModel[]>("/catalog/models").then(setLiveModels).catch(() => { metadataLoaded = false; });
     }
-    if (cached) return;
     api<AvailableModels>("/catalog/available")
       .then((payload) => {
-        cached = payload;
         setData(payload);
+        // Discovery is scoped to this signed-in agency. An outage leaves
+        // seeds available without blocking the other providers.
+        api<Provider[]>("/providers").then(async (providers) => {
+          const results = await Promise.allSettled(providers.filter((p) => p.configured && p.provider !== "openrouter").map(async (p) => {
+            const result = await api<{ models: string[] }>(`/providers/${p.provider}/models`);
+            return [p.provider, result.models] as const;
+          }));
+          const chat = { ...payload.chat };
+          for (const result of results) if (result.status === "fulfilled" && result.value[1].length) chat[result.value[0]] = result.value[1];
+          setData({ ...payload, chat });
+        }).catch(() => {});
       })
       .catch(() => {});
   }, []);

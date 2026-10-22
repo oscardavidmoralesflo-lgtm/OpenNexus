@@ -1,4 +1,5 @@
-// The AI provider (must match backend app/services/model_catalog.py).
+// Provider seeds; IDs match backend app/services/providers.py.
+// Direct providers use native IDs, and authenticated discovery updates them.
 //
 // OpenRouter fronts every vendor behind one key, so an agency configures a
 // single key and picks any model by its OpenRouter slug ("openai/gpt-6-luna").
@@ -52,6 +53,58 @@ export const PROVIDERS = [
       { id: "anthropic/claude-fable-5", label: "Claude Fable 5", group: "capable" },
       { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro", group: "capable" },
       { id: "x-ai/grok-4.5", label: "Grok 4.5", group: "capable" },
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "openai", label: "OpenAI", keyPlaceholder: "sk-...", keyUrl: "https://platform.openai.com/api-keys", models: [
+      {"id": "gpt-4.1-mini", "label": "gpt-4.1-mini", "group": "balanced", "recommended": true},
+      {"id": "gpt-4.1", "label": "gpt-4.1", "group": "balanced"},
+      {"id": "gpt-4.1-nano", "label": "gpt-4.1-nano", "group": "balanced"}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "anthropic", label: "Anthropic (Claude)", keyPlaceholder: "sk-ant-...", keyUrl: "https://platform.claude.com/settings/keys", models: [
+      {"id": "claude-sonnet-4-6", "label": "claude-sonnet-4-6", "group": "balanced", "recommended": true},
+      {"id": "claude-opus-5-5", "label": "claude-opus-5-5", "group": "balanced"},
+      {"id": "claude-haiku-4-5", "label": "claude-haiku-4-5", "group": "balanced"}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "google", label: "Google Gemini", keyPlaceholder: "AIza...", keyUrl: "https://aistudio.google.com/apikey", models: [
+      {"id": "gemini-3.8-flash", "label": "gemini-3.8-flash", "group": "balanced", "recommended": true},
+      {"id": "gemini-3.1-flash-lite", "label": "gemini-3.1-flash-lite", "group": "balanced"}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "deepseek", label: "DeepSeek", keyPlaceholder: "sk-...", keyUrl: "https://platform.deepseek.com/api_keys", models: [
+      {"id": "deepseek-flash", "label": "deepseek-flash", "group": "balanced", "recommended": true},
+      {"id": "deepseek-v4-pro", "label": "deepseek-v4-pro", "group": "balanced"}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "groq", label: "Groq", keyPlaceholder: "gsk_...", keyUrl: "https://console.groq.com/keys", models: [
+      {"id": "openai/gpt-oss-120b", "label": "openai/gpt-oss-120b", "group": "balanced", "recommended": true},
+      {"id": "openai/gpt-oss-20b", "label": "openai/gpt-oss-20b", "group": "balanced"},
+      {"id": "llama-3.3-70b-versatile", "label": "llama-3.3-70b-versatile", "group": "balanced"}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "xai", label: "xAI (Grok)", keyPlaceholder: "xai-...", keyUrl: "https://console.x.ai/", models: [
+      {"id": "grok-4.7", "label": "grok-4.7", "group": "balanced", "recommended": true}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "mistral", label: "Mistral AI", keyPlaceholder: "...", keyUrl: "https://console.mistral.ai/api-keys", models: [
+      {"id": "mistral-small-latest", "label": "mistral-small-latest", "group": "balanced", "recommended": true},
+      {"id": "mistral-medium-latest", "label": "mistral-medium-latest", "group": "balanced"},
+      {"id": "mistral-large-latest", "label": "mistral-large-latest", "group": "balanced"}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "together", label: "Together AI", keyPlaceholder: "...", keyUrl: "https://api.together.ai/settings/api-keys", models: [
+      {"id": "MiniMaxAI/MiniMax-M3", "label": "MiniMaxAI/MiniMax-M3", "group": "balanced", "recommended": true},
+      {"id": "meta-llama/Llama-3.3-70B-Instruct-Turbo", "label": "meta-llama/Llama-3.3-70B-Instruct-Turbo", "group": "balanced"}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "fireworks", label: "Fireworks AI", keyPlaceholder: "fw_...", keyUrl: "https://app.fireworks.ai/settings/users/api-keys", models: [
+      {"id": "accounts/fireworks/models/llama-v3p3-70b-instruct", "label": "accounts/fireworks/models/llama-v3p3-70b-instruct", "group": "balanced", "recommended": true}
+    ] as const satisfies readonly ModelOption[],
+  },
+  { id: "cerebras", label: "Cerebras", keyPlaceholder: "csk-...", keyUrl: "https://cloud.cerebras.ai/platform/", models: [
+      {"id": "zai-glm-4.7", "label": "zai-glm-4.7", "group": "balanced", "recommended": true},
+      {"id": "gpt-oss-120b", "label": "gpt-oss-120b", "group": "balanced"}
     ] as const satisfies readonly ModelOption[],
   },
 ] as const;
@@ -135,7 +188,7 @@ export function defaultModelFor(id: string): string {
 
 /** Human label for a model id, falling back to the id itself. */
 export function modelLabel(id: string): string {
-  return modelOptionsFor(DEFAULT_PROVIDER).find((model) => model.id === id)?.label ?? id;
+  return PROVIDERS.flatMap((provider) => [...modelOptionsFor(provider.id)]).find((model) => model.id === id)?.label ?? id;
 }
 
 // ~4 characters per token: same approximation as the backend, for the token

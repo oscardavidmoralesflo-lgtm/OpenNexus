@@ -205,6 +205,7 @@ export type AgentTool = {
   // null: every cached tool is exposed; a list restricts the server to it.
   enabled_tools: string[] | null;
   has_headers: boolean;
+  managed?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -581,7 +582,7 @@ export type Operations = { tz: string; bucket: string; totals: OpsMetrics; by_cl
 export type ReportFilters = { clients: { id: string; name: string }[]; agents: { id: string; name: string; client_id: string }[]; channels: string[]; models: string[] };
 
 export type CostReport = {
-  totals: { cost_usd: number; replies: number; conversations: number; input_tokens: number; output_tokens: number; avg_cost_per_reply_usd: number };
+  totals: { cost_usd: number; unpriced_replies?: number; replies: number; conversations: number; input_tokens: number; output_tokens: number; avg_cost_per_reply_usd: number };
   by_client: ReportGroup[];
   by_agent: ReportGroup[];
   by_model: ReportGroup[];
@@ -607,6 +608,7 @@ export type ReportReply = {
   reasoning_tokens: number;
   cost_usd: number;
   estimated: boolean;
+  cost_unknown?: boolean;
   duration_ms: number | null;
   tools: number;
   tool_errors: number;

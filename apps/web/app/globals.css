@@ -2837,3 +2837,16 @@ textarea[data-overflow="true"]::-webkit-scrollbar-thumb { border-radius: 8px; ba
 .drp-grid button.end { border-radius: 0 8px 8px 0; }
 .drp-grid button.start.end { border-radius: 8px; }
 .drp-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line-soft, var(--line)); }
+/* Managed application directory. */
+.integration-catalog { padding: 24px; display: grid; gap: 20px; }
+.integration-filters { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; gap: 16px; align-items: end; }
+.integration-filters > label { min-width: 0; }
+.integration-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.integration-card { display: flex; flex-direction: column; gap: 14px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); min-width: 0; }
+.integration-card-heading { display: flex; align-items: center; gap: 12px; }
+.integration-card-heading h4 { margin: 0 0 5px; font-size: 15px; }
+.integration-card small { color: var(--muted); }
+.integration-card .tools-actions { margin-top: auto; flex-wrap: wrap; }
+.integration-card > .pill { align-self: flex-start; }
+.integration-card .field-help { margin: 0; }
+@media (max-width: 760px) { .integration-filters { grid-template-columns: 1fr; } .integration-catalog { padding: 16px; } }

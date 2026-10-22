@@ -75,7 +75,12 @@ async def tool_loop(
             return completion
         # The assistant turn that asked for the tools must be echoed back, then
         # one tool message per call, in the same order.
-        convo.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": calls})
+        assistant = {"role": "assistant", "content": message.get("content") or "", "tool_calls": calls}
+        # Direct reasoning APIs can require their thinking field to be echoed
+        # with tool calls; discarding it breaks the next turn (e.g. DeepSeek).
+        if "reasoning_content" in message:
+            assistant["reasoning_content"] = message["reasoning_content"]
+        convo.append(assistant)
         for call in calls:
             function = call.get("function") or {}
             try:

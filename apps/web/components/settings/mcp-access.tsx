@@ -55,6 +55,7 @@ export function McpAccessSection() {
   };
 
   return <div className="page-form">
+    <section className="form-section"><div className="section-copy"><h2>{t("settings.mcp.roleHeading")}</h2></div><div className="form-fields"><p>{t("settings.mcp.roleCopy")}</p></div></section>
     <section className="form-section">
       <div className="section-copy"><h2>{t("settings.mcp.heading")}</h2><p>{t("settings.mcp.copy")}</p></div>
       <div className="form-fields">

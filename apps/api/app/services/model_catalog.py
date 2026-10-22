@@ -289,8 +289,9 @@ def available_models() -> dict:
     which is why the frontend asks instead of trusting its static lists.
     """
     snapshot = _snapshot()
+    from .providers import CHAT_MODELS
     return {
-        "chat": {"openrouter": [model.id for model in snapshot.models]},
+        "chat": {"openrouter": [model.id for model in snapshot.models], **{provider: list(models) for provider, models in CHAT_MODELS.items()}},
         "image": [model.id for model in snapshot.models if model.supports_vision],
         "audio": [model.id for model in snapshot.audio],
         "embedding": [model.id for model in snapshot.embeddings],

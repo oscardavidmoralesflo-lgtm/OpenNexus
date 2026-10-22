@@ -23,13 +23,13 @@ MANAGERS = ("owner", "admin")
 # Areas of the dashboard API the policy applies to (prefixes under /api).
 DASHBOARD_PREFIXES = (
     "/api/agency", "/api/agents", "/api/billing", "/api/catalog", "/api/clients", "/api/conversations",
-    "/api/dashboard", "/api/industries", "/api/mcp-access", "/api/providers", "/api/reports", "/api/sandbox",
+    "/api/dashboard", "/api/industries", "/api/integrations", "/api/mcp-access", "/api/providers", "/api/reports", "/api/sandbox",
     "/api/social", "/api/team", "/api/webchat", "/api/whatsapp/", "/api/whatsapp-cloud",
 )
 # Never under the policy even though a prefix above matches: Stripe calls it.
 EXEMPT = ("/api/billing/webhook",)
 # Readable only by owners and admins: secrets and money.
-MANAGER_READS = ("/api/providers", "/api/mcp-access", "/api/billing")
+MANAGER_READS = ("/api/integrations", "/api/providers", "/api/mcp-access", "/api/billing")
 # The writes an operator may make.
 OPERATOR_WRITES = ("/api/conversations",)
 # Paying is the owner's.

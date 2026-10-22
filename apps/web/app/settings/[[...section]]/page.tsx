@@ -9,6 +9,7 @@ import { SectionTabs, type SectionTab } from "@/components/section-tabs";
 import { WorkspaceDomainSection } from "@/components/settings/workspace-domain";
 import { McpAccessSection } from "@/components/settings/mcp-access";
 import { SecuritySection } from "@/components/settings/security-section";
+import { IntegrationAccessSection } from "@/components/settings/integration-access";
 import { TeamSection } from "@/components/settings/team-section";
 import { isManager, useCurrentUser } from "@/lib/current-user";
 import { useToast } from "@/components/toast";
@@ -18,8 +19,8 @@ import { useT, type TranslateFn } from "@/lib/i18n";
 import { PROVIDERS } from "@/lib/providers";
 import type { Agency, Provider, ProviderTest } from "@/types";
 
-type SettingsTab = "identity" | "domain" | "team" | "security" | "providers" | "preferences" | "agents";
-const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "providers", "preferences", "agents"];
+type SettingsTab = "identity" | "domain" | "team" | "security" | "providers" | "preferences" | "integrations" | "agents";
+const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "providers", "integrations", "preferences", "agents"];
 // What an operator or a viewer sees: their own account, and the team.
 const PERSONAL_TABS: SettingsTab[] = ["team", "security", "preferences"];
 
@@ -42,6 +43,7 @@ export default function SettingsPage() {
     { id: "domain", label: t("settings.tabs.domain"), icon: Globe2 },
     { id: "team", label: t("settings.tabs.team"), icon: Users },
     { id: "security", label: t("settings.tabs.security"), icon: Lock },
+    { id: "integrations", label: t("tools.tab"), icon: KeyRound },
     { id: "providers", label: t("settings.tabs.providers"), icon: KeyRound },
     { id: "preferences", label: t("settings.tabs.preferences"), icon: SlidersHorizontal },
     { id: "agents", label: t("settings.tabs.agents"), icon: Bot },
@@ -51,6 +53,7 @@ export default function SettingsPage() {
   const [agency, setAgency] = useState<Agency | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [busy, setBusy] = useState(false);
+  const [providerSearch, setProviderSearch] = useState("");
   const [logoVersion, setLogoVersion] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -77,6 +80,7 @@ export default function SettingsPage() {
   async function deleteLogo() { await api("/agency/logo", { method: "DELETE" }); setLogoVersion((v) => v + 1); await load(); }
 
   async function saveKey(provider: string, apiKey: string): Promise<boolean> {
+    apiKey = apiKey.trim();
     if (!apiKey.trim()) return false;
     setBusy(true);
     try {
@@ -112,12 +116,18 @@ export default function SettingsPage() {
 
     {tab === "providers" && <section className="section-block"><div className="section-heading"><div><h2>{t("settings.providers.heading")}</h2><p>{t("settings.providers.copy")}</p></div></div>
       <div className="security-note"><ShieldCheck size={20} /><span><strong>{t("settings.index.privateCredentials")}</strong> {t("settings.index.privateCredentialsCopy")}</span></div>
-      {PROVIDERS.map((preset) => (
+      <label>{t("settings.providers.search")}<input type="search" value={providerSearch} onChange={(e) => setProviderSearch(e.target.value)} placeholder={t("settings.providers.searchPlaceholder")} /></label>
+      <p className="field-help">{t("settings.providers.summary", { configured: providers.filter((p) => p.configured).length, total: PROVIDERS.length })}</p>
+      <p className="field-help">{t("settings.providers.capabilitiesHint")}</p>
+      {!PROVIDERS.some((p) => p.label.toLowerCase().includes(providerSearch.trim().toLowerCase())) && <p className="muted">{t("settings.providers.noResults")}</p>}
+      {PROVIDERS.filter((p) => p.label.toLowerCase().includes(providerSearch.trim().toLowerCase())).map((preset) => (
         <ProviderKeyCard key={preset.id} preset={preset} state={providers.find((x) => x.provider === preset.id)} busy={busy} onSave={saveKey} onRemove={removeKey} onToggle={toggleKey} t={t} />
       ))}
     </section>}
 
     {tab === "preferences" && <PreferencesSection />}
+
+    {tab === "integrations" && <IntegrationAccessSection />}
 
     {tab === "agents" && <McpAccessSection />}
   </div>;
@@ -127,6 +137,18 @@ function ProviderKeyCard({ preset, state, busy, onSave, onRemove, onToggle, t }:
   const [key, setKey] = useState("");
   const [reveal, setReveal] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [verification, setVerification] = useState("");
+  const [verificationError, setVerificationError] = useState(false);
+  async function verify() {
+    setTesting(true); setVerification("");
+    try {
+      const result = await api<ProviderTest>(`/providers/${preset.id}/test`, { method: "POST" });
+      setVerificationError(false);
+      setVerification(result.models?.length ? t("tools.catalog.modelsVerified", { count: result.models.length }) : t("tools.catalog.providerVerified"));
+    } catch (err) { setVerificationError(true); setVerification(messageFrom(err)); }
+    finally { setTesting(false); }
+  }
   // A stored key is shown whether it is in use or paused; "configured" alone
   // is also true while the deployment lends one.
   const stored = Boolean(state?.stored ?? state?.api_key_masked);
@@ -138,14 +160,16 @@ function ProviderKeyCard({ preset, state, busy, onSave, onRemove, onToggle, t }:
   }
 
   return (
-    <section className="form-section"><div className="section-copy"><h2>{preset.label}</h2><p>{t("settings.providers.byo", { label: preset.label })}</p></div>
+    <section className="form-section"><div className="section-copy"><h2>{preset.label}</h2><p>{t("settings.providers.byo", { label: preset.label })}</p><a className="text-button" href={preset.keyUrl} target="_blank" rel="noopener noreferrer">{t("settings.providers.getKey")}</a></div>
       <div className="form-fields">
         {configured ? (
           <div className="key-configured">
             <span className="key-configured-status">{enabled ? <CheckCircle2 size={18} /> : <PauseCircle size={18} />} {t(enabled ? "settings.providers.configured" : "settings.providers.paused", { label: preset.label })}</span>
             <label className="switch-row"><span><strong>{t("settings.providers.useKey")}</strong><small>{t("settings.providers.useKeyHint")}</small></span><input type="checkbox" checked={enabled} disabled={busy} onChange={(e) => onToggle(preset.id, e.target.checked)} /></label>
             {!enabled && !state?.configured && <Alert type="error">{t("settings.providers.pausedNothingAnswers")}</Alert>}
+            {verification && <Alert type={verificationError ? "error" : "success"}>{verification}</Alert>}
             <div className="key-configured-actions">
+              <button type="button" className="button secondary" disabled={busy || testing} onClick={() => void verify()}>{testing ? <LoaderCircle className="spin" size={15} /> : <CheckCircle2 size={15} />} {t("tools.catalog.verifyProvider")}</button>
               <button type="button" className="button ghost" disabled={busy} onClick={() => { setKey(""); setReplacing(true); }}>{t("settings.providers.replace")}</button>
               <button type="button" className="button danger" disabled={busy} onClick={() => onRemove(preset.id)}><Trash2 size={15} /> {t("settings.providers.remove")}</button>
             </div>

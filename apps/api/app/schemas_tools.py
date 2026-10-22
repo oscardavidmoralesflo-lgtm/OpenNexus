@@ -125,6 +125,7 @@ class AgentToolOut(BaseModel):
     tools_cached_at: datetime | None = None
     enabled_tools: list[str] | None = None
     has_headers: bool = False
+    managed: bool = False
     created_at: datetime
     updated_at: datetime
 
