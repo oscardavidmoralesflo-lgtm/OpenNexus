@@ -3,7 +3,7 @@ name: Deploy to VPS
 # Runs /opt/opennexus/deploy.sh on the VPS. The deploy key is restricted in the
 # server's authorized_keys to that script, so this job can do nothing else.
 # The script pulls the branch, rebuilds changed services, checks health and
-# rolls back on failure.
+# rolls back on failure. It runs only after the Tests workflow passes.
 on:
   push:
     branches: [feature/panel-parity]
@@ -14,7 +14,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  tests:
+    uses: ./.github/workflows/test.yml
+
   deploy:
+    needs: tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
