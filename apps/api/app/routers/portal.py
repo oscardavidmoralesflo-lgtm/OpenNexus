@@ -10,6 +10,7 @@ import re
 from fastapi import APIRouter, Cookie, Depends, Header, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import Interval, and_, case, exists, func, literal, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
+from starlette.concurrency import run_in_threadpool
 
 from pydantic import BaseModel, Field
 
@@ -266,7 +267,6 @@ def _detail(db: Session, client: Client, conversation_id: uuid.UUID) -> Conversa
 def public_portal(slug: str, db: Session = Depends(get_db)):
     client = _public_client(db, slug)
     agency = db.get(Agency, client.agency_id)
-    settings = get_settings()
     return {
         "client_name": client.name,
         "portal_title": client.portal_title or f"{client.name} Inbox",
@@ -277,8 +277,6 @@ def public_portal(slug: str, db: Session = Depends(get_db)):
         # the client logo when set.
         "agency_logo_url": f"/api/portal/{slug}/logo" if agency.logo_data else None,
         "client_logo_url": f"/api/portal/{slug}/client-logo" if client.logo_mime else None,
-        "ios_app_url": (settings.portal_ios_app_url or "").strip() or None,
-        "android_app_url": (settings.portal_android_app_url or "").strip() or None,
     }
 
 
@@ -2183,11 +2181,27 @@ async def portal_attachment(
     conversation_id: uuid.UUID,
     attachment_id: uuid.UUID,
     playback_format: str | None = Query(default=None, alias="format", pattern="^m4a$"),
-    client: Client = Depends(_portal_client),
+    portal_access_token: str | None = Cookie(default=None),
+    authorization: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    conversation = _detail(db, client, conversation_id)
-    attachment = conversation_attachment(db, conversation, attachment_id)
+    def load_attachment():
+        # Keep authentication and reads in one worker, so no connection is held
+        # between worker invocations when concurrent downloads fill the pool.
+        try:
+            client = _portal_client(slug, portal_access_token, authorization, db)
+            conversation = db.scalar(select(Conversation).where(
+                Conversation.id == conversation_id, Conversation.client_id == client.id,
+            ))
+            if not conversation:
+                raise HTTPException(status_code=404, detail="Conversation not found")
+            return conversation_attachment(db, conversation, attachment_id)
+        finally:
+            # Bytes are loaded already. Release before conversion or response IO.
+            db.close()
+
+    # Synchronous database IO must not block other requests on the event loop.
+    attachment = await run_in_threadpool(load_attachment)
     if playback_format is None:
         return attachment_response(attachment)
     if attachment.kind != "audio":

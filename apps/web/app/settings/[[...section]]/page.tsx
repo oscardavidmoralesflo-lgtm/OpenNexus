@@ -12,6 +12,7 @@ import { SecuritySection } from "@/components/settings/security-section";
 import { IntegrationAccessSection } from "@/components/settings/integration-access";
 import { TeamSection } from "@/components/settings/team-section";
 import { isManager, useCurrentUser } from "@/lib/current-user";
+import { AppLinks } from "@/components/app-links";
 import { useToast } from "@/components/toast";
 import { api, messageFrom } from "@/lib/api";
 import { currentSections, showSections } from "@/lib/section-path";
@@ -107,6 +108,8 @@ export default function SettingsPage() {
     <SectionTabs tabs={visibleTabs} value={tab} onChange={changeTab} />
 
     {tab === "identity" && <form className="page-form" onSubmit={saveIdentity}><section className="form-section"><div className="section-copy"><h2>{t("settings.index.identityHeading")}</h2><p>{t("settings.index.identityCopy")}</p></div><div className="form-fields"><div className="logo-editor"><button type="button" className="logo-preview" onClick={() => fileRef.current?.click()}>{agency.logo_url ? <img src={`${agency.logo_url}?v=${logoVersion}`} alt={t("settings.index.logoAlt")} /> : <ImagePlus size={24} />}</button><div><strong>{t("settings.index.logoLabel")}</strong><small>{t("settings.index.logoHint")}</small><div><button type="button" className="text-button" onClick={() => fileRef.current?.click()}>{t("settings.index.change")}</button>{agency.logo_url && <button type="button" className="text-button danger-text" onClick={deleteLogo}><Trash2 size={14} /> {t("settings.index.remove")}</button>}</div></div><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(e) => uploadLogo(e.target.files?.[0])} /></div><div className="form-grid"><label>{t("settings.index.agencyName")}<input name="name" required defaultValue={agency.name} /></label><label>{t("settings.index.identifier")}<input name="slug" required defaultValue={agency.slug} /></label></div><label>{t("settings.index.brandColor")}<div className="color-input"><input type="color" name="brand_color" defaultValue={agency.brand_color} /><input defaultValue={agency.brand_color} readOnly /></div></label><button className="button primary align-start" disabled={busy}>{busy ? <LoaderCircle size={17} className="spin" /> : <Save size={17} />} {t("settings.index.saveIdentity")}</button></div></section></form>}
+
+    {tab === "identity" && (agency.ios_app_url || agency.android_app_url) && <section className="form-section"><div className="section-copy"><h2>{t("settings.index.mobileAppHeading")}</h2><p>{t("settings.index.mobileAppCopy")}</p></div><div className="form-fields"><AppLinks ios={agency.ios_app_url} android={agency.android_app_url} /></div></section>}
 
     {tab === "domain" && <WorkspaceDomainSection />}
 

@@ -72,10 +72,17 @@ def enforce(request: Request, access_token: str | None = Cookie(default=None), d
         return
     from ..deps import user_from_token
 
-    user = user_from_token(db, access_token)
-    if user is None:
-        return
-    if needs_two_factor_setup(user) and not (request.method in SAFE_METHODS and path == "/api/agency"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Set up two-step verification in Settings → Security to continue")
-    if not allowed(user.role, request.method, path):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your role cannot do this")
+    try:
+        user = user_from_token(db, access_token)
+        if user is None:
+            return
+        if needs_two_factor_setup(user) and not (request.method in SAFE_METHODS and path == "/api/agency"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Set up two-step verification in Settings → Security to continue")
+        if not allowed(user.role, request.method, path):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Your role cannot do this")
+    finally:
+        # This check runs in its own worker call, before the route's. Holding a
+        # connection across that gap lets concurrent requests take every pooled
+        # connection while each waits for a worker, so hand it back now; the
+        # route's session opens a new one when it needs it.
+        db.close()

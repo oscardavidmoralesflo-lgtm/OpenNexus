@@ -8,7 +8,7 @@ export type User = {
   agency: Agency;
 };
 
-export type Agency = { id: string; name: string; slug: string; brand_color: string; logo_url: string | null; billing_enabled?: boolean; require_two_factor?: boolean };
+export type Agency = { id: string; name: string; slug: string; brand_color: string; logo_url: string | null; billing_enabled?: boolean; require_two_factor?: boolean; ios_app_url?: string | null; android_app_url?: string | null };
 
 export type WorkspaceDomain = {
   branded_url: string | null;
@@ -114,6 +114,7 @@ export type ClientDomain = {
   verified: boolean;
   txt_host: string | null;
   txt_value: string | null;
+  cname_target: string | null;
 };
 
 export type Agent = {
@@ -509,8 +510,6 @@ export type PortalPublic = {
   agency_brand_color: string;
   agency_logo_url: string | null;
   client_logo_url: string | null;
-  ios_app_url?: string | null;
-  android_app_url?: string | null;
 };
 
 export type SocialProvider = "instagram" | "messenger";
