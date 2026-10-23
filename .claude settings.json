@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api repos/oscardavidmoralesflo-lgtm/opennexus/pulls:*)",
+      "Bash(git push origin feature/panel-parity:*)",
+      "Bash(git push origin HEAD:feature/panel-parity:*)"
+    ]
+  }
+}
