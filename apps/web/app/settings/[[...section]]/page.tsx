@@ -13,6 +13,8 @@ import { IntegrationAccessSection } from "@/components/settings/integration-acce
 import { TeamSection } from "@/components/settings/team-section";
 import { isManager, useCurrentUser } from "@/lib/current-user";
 import { AppLinks } from "@/components/app-links";
+import { KeyActions } from "@/components/key-actions";
+import { PhoneAccounts } from "@/components/phone-accounts";
 import { useToast } from "@/components/toast";
 import { api, messageFrom } from "@/lib/api";
 import { currentSections, showSections } from "@/lib/section-path";
@@ -132,6 +134,8 @@ export default function SettingsPage() {
 
     {tab === "integrations" && <IntegrationAccessSection />}
 
+    {tab === "providers" && <PhoneAccounts />}
+
     {tab === "agents" && <McpAccessSection />}
   </div>;
 }
@@ -164,18 +168,18 @@ function ProviderKeyCard({ preset, state, busy, onSave, onRemove, onToggle, t }:
 
   return (
     <section className="form-section"><div className="section-copy"><h2>{preset.label}</h2><p>{t("settings.providers.byo", { label: preset.label })}</p><a className="text-button" href={preset.keyUrl} target="_blank" rel="noopener noreferrer">{t("settings.providers.getKey")}</a></div>
-      <div className="form-fields">
+      <div className="form-fields key-form">
         {configured ? (
           <div className="key-configured">
-            <span className="key-configured-status">{enabled ? <CheckCircle2 size={18} /> : <PauseCircle size={18} />} {t(enabled ? "settings.providers.configured" : "settings.providers.paused", { label: preset.label })}</span>
-            <label className="switch-row"><span><strong>{t("settings.providers.useKey")}</strong><small>{t("settings.providers.useKeyHint")}</small></span><input type="checkbox" checked={enabled} disabled={busy} onChange={(e) => onToggle(preset.id, e.target.checked)} /></label>
+            <div className="key-configured-head">
+              <span className="key-configured-status">{enabled ? <CheckCircle2 size={18} /> : <PauseCircle size={18} />} {t(enabled ? "settings.providers.configured" : "settings.providers.paused", { label: preset.label })}</span>
+              <KeyActions busy={busy} replaceLabel={t("settings.providers.replace")} removeLabel={t("settings.providers.remove")} confirmTitle={t("settings.providers.removeTitle", { label: preset.label })} confirmMessage={t("settings.providers.removeCopy")} toggle={{ checked: enabled, label: t("settings.providers.useKey"), hint: t("settings.providers.useKeyHint"), confirm: (on) => on
+                ? { title: t("settings.providers.resumeTitle", { label: preset.label }), message: t("settings.providers.resumeCopy", { label: preset.label }), label: t("settings.providers.resumeConfirm") }
+                : { title: t("settings.providers.pauseTitle", { label: preset.label }), message: t("settings.providers.pauseCopy"), label: t("settings.providers.pauseConfirm") }, onChange: (on) => onToggle(preset.id, on) }} onReplace={() => { setKey(""); setReplacing(true); }} onRemove={() => onRemove(preset.id)} />
+            </div>
             {!enabled && !state?.configured && <Alert type="error">{t("settings.providers.pausedNothingAnswers")}</Alert>}
             {verification && <Alert type={verificationError ? "error" : "success"}>{verification}</Alert>}
-            <div className="key-configured-actions">
-              <button type="button" className="button secondary" disabled={busy || testing} onClick={() => void verify()}>{testing ? <LoaderCircle className="spin" size={15} /> : <CheckCircle2 size={15} />} {t("tools.catalog.verifyProvider")}</button>
-              <button type="button" className="button ghost" disabled={busy} onClick={() => { setKey(""); setReplacing(true); }}>{t("settings.providers.replace")}</button>
-              <button type="button" className="button danger" disabled={busy} onClick={() => onRemove(preset.id)}><Trash2 size={15} /> {t("settings.providers.remove")}</button>
-            </div>
+            <div className="form-footer"><button type="button" className="button secondary" disabled={busy || testing} onClick={() => void verify()}>{testing ? <LoaderCircle className="spin" size={15} /> : <CheckCircle2 size={15} />} {t("tools.catalog.verifyProvider")}</button></div>
           </div>
         ) : (
           <>

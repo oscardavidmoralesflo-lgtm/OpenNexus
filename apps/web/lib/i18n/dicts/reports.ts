@@ -60,6 +60,7 @@ const en = {
   },
   cols: {
     purposeSummary: "Summary",
+    purposeCall: "Call",
     client: "Client",
     agent: "Agent",
     model: "Model",
@@ -191,6 +192,7 @@ const es: typeof en = {
   },
   cols: {
     purposeSummary: "Resumen",
+    purposeCall: "Llamada",
     client: "Cliente",
     agent: "Agente",
     model: "Modelo",

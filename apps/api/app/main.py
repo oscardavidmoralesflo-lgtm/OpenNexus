@@ -25,6 +25,7 @@ from .routers import (
     integrations,
     mcp,
     mobile,
+    phone,
     portal,
     providers,
     reports,
@@ -151,3 +152,5 @@ app.include_router(mcp.public_router, prefix="/api")
 app.include_router(mcp.router, prefix="/api")
 app.include_router(social.router, prefix="/api")
 app.include_router(social_webhook.public_router, prefix="/api")
+app.include_router(phone.router, prefix="/api")
+app.include_router(phone.public_router, prefix="/api")

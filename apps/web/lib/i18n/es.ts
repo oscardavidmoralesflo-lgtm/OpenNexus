@@ -13,6 +13,7 @@ import { tools } from "./dicts/tools";
 import { reports } from "./dicts/reports";
 import { sandbox } from "./dicts/sandbox";
 import { billing } from "./dicts/billing";
+import { phone } from "./dicts/phone";
 
 // Spanish dictionary. Composed from the same modules; typed as Dictionary so it
 // must mirror the exact shape of `en` (each area's `es` mirrors its own `en`).
@@ -31,4 +32,5 @@ export const es: Dictionary = {
   reports: reports.es,
   sandbox: sandbox.es,
   billing: billing.es,
+  phone: phone.es,
 };
