@@ -127,8 +127,6 @@ const en = {
   estimatedMark: "estimated",
   unpricedNote: "{count} replies have no billed amount from their direct provider. Costs shown are partial; check the provider dashboard for the final charge.",
   pageOf: "{from}–{to} of {total}",
-  prev: "Previous",
-  next: "Next",
 };
 
 const es: typeof en = {
@@ -259,8 +257,6 @@ const es: typeof en = {
   estimatedMark: "estimado",
   unpricedNote: "{count} respuestas no tienen un importe facturado por su proveedor directo. Los costos mostrados son parciales; consulta el panel del proveedor para ver el cargo final.",
   pageOf: "{from}–{to} de {total}",
-  prev: "Anterior",
-  next: "Siguiente",
 };
 
 export const reports = { en, es };
