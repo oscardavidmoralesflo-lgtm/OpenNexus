@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]  # monorepo root (used for a sha
 
 
 class Settings(BaseSettings):
-    app_name: str = "OpenNexus API"
+    app_name: str = "Agentaria API"
     database_url: str = "postgresql+psycopg://opennexus:opennexus@localhost:5432/opennexus"
     secret_key: str = "dev-local-change-this-key-please"
     encryption_key: str = "dev-local-change-this-key-too"

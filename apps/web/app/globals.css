@@ -27,12 +27,14 @@
   --faint: #aeb6cc;
   --on-dark: #e6ebf5;
   --inverse: #17203a;
-  --accent: #075985;
-  --accent-hover: #064466;
-  --accent-text: #075985;
-  --accent-soft: #eaf3f5;
-  --accent-line: #c9dce4;
-  --accent-rgb: 7, 89, 133;
+  --accent: #14213d;
+  --accent-hover: #0b1529;
+  --accent-text: #2c4a9a;
+  --accent-soft: #eef1f9;
+  --accent-line: #cbd4ea;
+  --accent-rgb: 20, 33, 61;
+  /* Agentaria signal orange: brand highlights only, never body text. */
+  --brand-accent: #ff5a36;
   --green: #00a67d;
   --green-text: #00866b;
   --green-soft: #e8f7f2;
@@ -91,12 +93,13 @@
   --faint: #56617b;
   --on-dark: #e8edf7;
   --inverse: #2f3a56;
-  --accent: #2a8ec4;
-  --accent-hover: #3b9fd4;
-  --accent-text: #7cc6ec;
-  --accent-soft: #152a3b;
-  --accent-line: #25506a;
-  --accent-rgb: 124, 198, 236;
+  --accent: #3d63d6;
+  --accent-hover: #4f74e3;
+  --accent-text: #9db4f5;
+  --accent-soft: #182340;
+  --accent-line: #2c3d6e;
+  --accent-rgb: 157, 180, 245;
+  --brand-accent: #ff6a47;
   --green: #1fae86;
   --green-text: #5bd6ad;
   --green-soft: #12302a;
@@ -1709,8 +1712,8 @@ button.back-link { padding: 0; border: 0; background: transparent; cursor: point
   .wa-actions .button, .wa-actions-side { width: 100%; }
 }
 
-/* OpenNexus mark: a self-contained SVG tile, shown whole at the icon size. */
-.opennexus-icon {
+/* Agentaria mark: a self-contained SVG tile, shown whole at the icon size. */
+.brand-icon {
   width: 32px !important;
   height: 32px !important;
   min-width: 32px;
@@ -1721,18 +1724,18 @@ button.back-link { padding: 0; border: 0; background: transparent; cursor: point
   background: transparent !important;
   box-shadow: none !important;
 }
-.opennexus-icon img { width: 100% !important; height: 100% !important; display: block; }
-.brand .opennexus-icon, .preview-logo.opennexus-icon { width: 30px !important; height: 30px !important; min-width: 30px; }
+.brand-icon img { width: 100% !important; height: 100% !important; display: block; }
+.brand .brand-icon, .preview-logo.brand-icon { width: 30px !important; height: 30px !important; min-width: 30px; }
 
 .brand-row { padding-bottom: 14px; }
-.brand { color: var(--accent-text); font-size: 16px; font-weight: 700; }
+.brand { color: var(--ink); font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
 .sidebar-workspace { min-height: 38px; margin: 12px 4px 14px; padding: 0 9px; display: flex; align-items: center; gap: 8px; color: var(--muted); border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); font-size: 12px; }
 .sidebar-workspace span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The agency's own logo when it has one; the building icon otherwise. */
 .sidebar-workspace img { width: 20px; height: 20px; flex: 0 0 auto; border-radius: 5px; object-fit: contain; }
 .sidebar nav { margin-top: 0; }
 .sidebar nav a.active { color: var(--accent-text); background: var(--accent-soft); }
-.sidebar nav a.active svg { color: var(--green-text); }
+.sidebar nav a.active svg { color: var(--brand-accent); }
 .user-avatar { color: var(--accent-text); background: var(--green-soft); }
 
 .eyebrow, .access-eyebrow { color: var(--green-text); }
@@ -1798,7 +1801,7 @@ input:focus, textarea:focus, select:focus, .phone-input:focus-within { border-co
 .settings-intro, .security-note { color: var(--accent-text); border-color: var(--line); background: var(--canvas); }
 .wa-side > svg { color: var(--green-text); }
 
-.access-brand strong { color: var(--accent-text); font-size: 16px; }
+.access-brand strong { color: var(--ink); font-family: var(--font-display); font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
 .preview-logo, .preview-icon { color: var(--accent-text); background: var(--accent-soft); }
 .access-card-label { color: var(--green-text); }
 .portal-access .access-card-label { color: var(--portal-color, var(--accent-text)); }

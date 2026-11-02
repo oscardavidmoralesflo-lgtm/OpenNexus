@@ -58,7 +58,7 @@ export default function LoginPage() {
   return (
     <main className="access-page agency-access">
       <header className="access-topbar">
-        <div className="access-brand"><span className="opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><strong>OpenNexus</strong></div>
+        <div className="access-brand"><span className="brand-icon"><img src="/brand/agentaria-mark.svg" alt="" /></span><strong>Agentaria</strong></div>
         <small>{t("auth.tagline")}</small>
       </header>
       <div className="access-layout">
@@ -67,7 +67,7 @@ export default function LoginPage() {
           <h1>{t("auth.introTitle")}</h1>
           <p>{t("auth.introDescription")}</p>
           <div className="access-preview" aria-hidden="true">
-            <header><div><span className="preview-logo opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><strong>{t("auth.previewTitle")}</strong></div><small>{t("auth.previewToday")}</small></header>
+            <header><div><span className="preview-logo brand-icon"><img src="/brand/agentaria-mark.svg" alt="" /></span><strong>{t("auth.previewTitle")}</strong></div><small>{t("auth.previewToday")}</small></header>
             <div className="preview-metrics"><article><span>{t("auth.previewClientsActive")}</span><strong>12</strong></article><article><span>{t("auth.previewAgents")}</span><strong>28</strong></article><article><span>{t("auth.previewConversations")}</span><strong>846</strong></article></div>
             <div className="preview-list">
               <div><span className="preview-icon"><Building2 size={16} /></span><p><strong>{t("auth.previewClinicName")}</strong><small>{t("auth.previewClinicMeta")}</small></p><em>{t("auth.previewActive")}</em></div>

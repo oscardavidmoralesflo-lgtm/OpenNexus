@@ -1,11 +1,13 @@
 <p align="center">
-  <img src="apps/web/public/brand/opennexus-mark.svg" width="88" alt="OpenNexus" />
+  <img src="apps/web/public/brand/agentaria-mark.svg" width="88" alt="Agentaria" />
 </p>
 
-<h1 align="center">OpenNexus</h1>
+<h1 align="center">Agentaria</h1>
 
 <p align="center">
-  The open-source, white-label platform for agencies to build, run and manage AI agents for their clients.
+  AI agents for agencies: the white-label platform to build, run and manage AI agents for every client.
+  <br />
+  <sub>Formerly OpenNexus. The repository, Docker images and environment variables keep the <code>opennexus</code> name.</sub>
 </p>
 
 <p align="center">

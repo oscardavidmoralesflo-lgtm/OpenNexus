@@ -103,7 +103,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="OpenNexus API",
+    title="Agentaria API",
     description="API to manage agencies, clients and AI agents.",
     version="0.3.0",
     lifespan=lifespan,
