@@ -15,6 +15,7 @@ import { tools } from "./dicts/tools";
 import { reports } from "./dicts/reports";
 import { sandbox } from "./dicts/sandbox";
 import { billing } from "./dicts/billing";
+import { phone } from "./dicts/phone";
 
 export const en = {
   ...core.en,
@@ -31,6 +32,7 @@ export const en = {
   reports: reports.en,
   sandbox: sandbox.en,
   billing: billing.en,
+  phone: phone.en,
 };
 
 export type Dictionary = typeof en;

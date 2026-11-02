@@ -25,6 +25,7 @@ from .routers import (
     integrations,
     mcp,
     mobile,
+    phone,
     portal,
     providers,
     reports,
@@ -66,8 +67,11 @@ async def _auto_resolve_loop() -> None:
 
 
 async def _follow_up_loop() -> None:
-    """Send due follow-ups and apply pending resolutions on a timer."""
+    """Send due follow-ups and apply pending resolutions on a timer. Phone
+    calls whose end-of-call report never arrived are finished on the same
+    timer."""
     from .services.follow_ups import run_due
+    from .services.phone_calls import reconcile_calls
 
     while True:
         await asyncio.sleep(max(5.0, get_settings().follow_up_sweep_seconds))
@@ -76,6 +80,11 @@ async def _follow_up_loop() -> None:
                 await run_due(db)
         except Exception:  # noqa: BLE001 - a failed sweep must not stop the next one
             logger.exception("Follow-up sweep failed")
+        try:
+            with new_session() as db:
+                await reconcile_calls(db)
+        except Exception:  # noqa: BLE001
+            logger.exception("Phone call reconciliation failed")
 
 
 @asynccontextmanager
@@ -151,3 +160,5 @@ app.include_router(mcp.public_router, prefix="/api")
 app.include_router(mcp.router, prefix="/api")
 app.include_router(social.router, prefix="/api")
 app.include_router(social_webhook.public_router, prefix="/api")
+app.include_router(phone.router, prefix="/api")
+app.include_router(phone.public_router, prefix="/api")

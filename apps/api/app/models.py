@@ -245,7 +245,10 @@ class Agent(Base):
     # Voice notes: "off", "mirror" (when the customer sent one) or "always".
     voice_replies: Mapped[str] = mapped_column(String(10), default="off", server_default="off")
     voice_model: Mapped[str] = mapped_column(String(180), default="", server_default="")
-    voice_name: Mapped[str] = mapped_column(String(60), default="", server_default="")
+    # The TTS voice for voice notes (e.g. "nova"). Its API field stays
+    # ``voice_name`` on the humanization routes; the column was renamed so the
+    # phone agents' ``voice_name`` could take that name.
+    voice_note_voice: Mapped[str] = mapped_column(String(60), default="", server_default="")
     # Whether the agent may resolve a conversation itself once the contact's
     # request is settled, instead of leaving it open until it goes idle.
     resolve_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -284,12 +287,24 @@ class Agent(Base):
     # Embedding model for this agent's knowledge base. Vectors from different
     # models are not comparable, so chunks record theirs and a change reindexes.
     embedding_model: Mapped[str] = mapped_column(String(180), default="openai/text-embedding-3-small", server_default="openai/text-embedding-3-small")
+    # What the agent answers, chosen when it is created: "chat" (messages on
+    # WhatsApp, Instagram, Messenger, the web) or "voice" (phone calls). A voice
+    # agent speaks with ``voice_id`` and opens every call with ``greeting``;
+    # it puts the caller through to ``transfer_number`` (E.164) when
+    # ``transfer_when`` says so, or tells them someone will call back.
+    kind: Mapped[str] = mapped_column(String(20), default="chat", server_default="chat")
+    voice_id: Mapped[str] = mapped_column(String(80), default="", server_default="")
+    voice_name: Mapped[str] = mapped_column(String(180), default="", server_default="")
+    greeting: Mapped[str] = mapped_column(Text, default="", server_default="")
+    transfer_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    transfer_when: Mapped[str] = mapped_column(Text, default="", server_default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
     client: Mapped[Client] = relationship(back_populates="agents")
     documents: Mapped[list["KnowledgeDocument"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    media_assets: Mapped[list["AgentMediaAsset"]] = relationship(back_populates="agent", cascade="all, delete-orphan", order_by="AgentMediaAsset.created_at")
     qa_pairs: Mapped[list["AgentQA"]] = relationship(back_populates="agent", cascade="all, delete-orphan", order_by="AgentQA.position")
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     whatsapp_channels: Mapped[list["WhatsAppChannel"]] = relationship(back_populates="agent")
@@ -445,6 +460,97 @@ class WhatsAppCloudChannel(Base):
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="whatsapp_cloud_channel")
 
 
+class CallAccount(Base):
+    """An agency's account at a service phone calls go through: ElevenLabs
+    (voice, speech recognition, turn taking) or a phone carrier (Twilio,
+    Telnyx) whose numbers ring the agent. One per provider per agency, bring
+    your own key; the secret is a JSON object encrypted like provider keys."""
+
+    __tablename__ = "call_accounts"
+    __table_args__ = (UniqueConstraint("agency_id", "provider", name="uq_call_accounts_agency_provider"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    # Names the account in URLs a provider calls back, without revealing the row id.
+    public_id: Mapped[str] = mapped_column(String(64), default=new_public_id, unique=True)
+    encrypted_secret: Mapped[str] = mapped_column(Text)
+    secret_hint: Mapped[str] = mapped_column(String(40), default="", server_default="")
+    # ElevenLabs only: the workspace webhook that reports finished calls, and
+    # the secret its requests are signed with.
+    webhook_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    encrypted_webhook_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Where that webhook points. ElevenLabs cannot move a webhook, so a new
+    # address (another domain, a new tunnel) gets a new one.
+    webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # ElevenLabs only: the workspace secret its agents send when they call
+    # back during a call (who is calling, a tool), and the hash it is checked
+    # against. The value itself is only ever stored at ElevenLabs.
+    tool_secret_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    tool_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class PhoneChannel(Base):
+    """A phone number of the client that a voice agent answers. The number
+    lives at the agency's carrier; ElevenLabs takes its calls with the agent's
+    voice and calls OpenLivery back for who is calling and for its tools."""
+
+    __tablename__ = "phone_channels"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="RESTRICT"), index=True)
+    # Names the line in the URLs ElevenLabs calls during a call.
+    public_id: Mapped[str] = mapped_column(String(64), default=new_public_id, unique=True)
+    label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    phone_number: Mapped[str] = mapped_column(String(32))
+    provider: Mapped[str] = mapped_column(String(20))
+    provider_number_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    elevenlabs_agent_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    elevenlabs_phone_number_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # The line's tools at ElevenLabs, by name: {"id": ..., "hash": ...}, the
+    # hash of what was last written so an unchanged tool is not written again.
+    elevenlabs_tools: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(30), default="disconnected")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    client: Mapped[Client] = relationship()
+    agent: Mapped[Agent] = relationship()
+
+
+class PhoneCall(Base):
+    """One call on a phone line and the conversation it became. Filled while
+    the call runs and completed by the report ElevenLabs sends at hang-up."""
+
+    __tablename__ = "phone_calls"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), unique=True)
+    phone_channel_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("phone_channels.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # ElevenLabs' conversation id: the same on every turn of the call.
+    external_call_id: Mapped[str] = mapped_column(String(80), unique=True)
+    caller: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # What ElevenLabs charged for the call, in its credits.
+    # What the call cost in USD as ElevenLabs reports it: the voice's minutes plus the model.
+    cost_usd: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    end_reason: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class TemplateWebhook(Base):
     """An address another system posts to so an approved template goes out on
     one WhatsApp API number. The number and the template are fixed here; the
@@ -557,6 +663,34 @@ class KnowledgeChunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     document: Mapped[KnowledgeDocument] = relationship(back_populates="chunks")
+
+
+class AgentMediaAsset(Base):
+    """A file the agent can send to a customer: a product photo, a catalog, a
+    price list. Not knowledge: nothing here is read or indexed. The model sees
+    only the name and the description of when to send it, and the bytes leave
+    as a message attachment through the conversation's channel.
+
+    Images are normalized on upload (resized, re-encoded) so one stored file is
+    accepted by every channel. Bytes live in Postgres like KnowledgeDocument;
+    the column is deferred so listing the library never loads them.
+    """
+
+    __tablename__ = "agent_media_assets"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    kind: Mapped[str] = mapped_column(String(20))  # image | file
+    mime: Mapped[str] = mapped_column(String(100))
+    filename: Mapped[str] = mapped_column(String(255))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    agent: Mapped[Agent] = relationship(back_populates="media_assets")
 
 
 class UsageRecord(Base):
@@ -761,6 +895,9 @@ class Conversation(Base):
     widget_channel_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("widget_channels.id", ondelete="CASCADE"), nullable=True, index=True
     )
+    phone_channel_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("phone_channels.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     external_chat_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contact_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
     contact_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -830,6 +967,8 @@ class Conversation(Base):
     whatsapp_cloud_channel: Mapped[WhatsAppCloudChannel | None] = relationship(back_populates="conversations")
     widget_channel: Mapped["WidgetChannel | None"] = relationship(back_populates="conversations")
     social_channel: Mapped["SocialChannel | None"] = relationship()
+    phone_channel: Mapped["PhoneChannel | None"] = relationship()
+    phone_call: Mapped["PhoneCall | None"] = relationship(uselist=False, viewonly=True)
     messages: Mapped[list["Message"]] = relationship(back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at")
 
     @property

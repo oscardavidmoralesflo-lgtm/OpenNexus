@@ -17,6 +17,7 @@ from ..deps import get_current_user
 from ..models import AgentTool, ManagedIntegration, User, now_utc
 from ..schemas_tools import AgentToolIn, AgentToolOut, HttpToolUpdate, McpTestIn, McpTestOut
 from ..security import decrypt_secret, encrypt_secret
+from ..services import phone_calls
 from ..services.tools.mcp_client import _flatten_exceptions, describe_mcp_error, discover_mcp_tools
 from .agents import _agent
 
@@ -100,6 +101,7 @@ async def create_tool(
     db.add(tool)
     db.commit()
     db.refresh(tool)
+    phone_calls.refresh_lines_soon(db, agent_id=agent_id)
     return _out(tool)
 
 
@@ -138,6 +140,7 @@ async def update_tool(
         tool.enabled_tools = _prune_selection(tool.enabled_tools if selection is ... else selection, tool.cached_tools)
     db.commit()
     db.refresh(tool)
+    phone_calls.refresh_lines_soon(db, agent_id=agent_id)
     return _out(tool)
 
 
@@ -148,6 +151,7 @@ def delete_tool(agent_id: uuid.UUID, tool_id: uuid.UUID, db: Session = Depends(g
         raise HTTPException(409, "Disconnect this account from the integration catalog to revoke access.")
     db.delete(tool)
     db.commit()
+    phone_calls.refresh_lines_soon(db, agent_id=agent_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

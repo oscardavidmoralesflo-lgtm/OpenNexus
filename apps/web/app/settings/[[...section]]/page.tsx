@@ -1,10 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Bot, CheckCircle2, Lock, Users, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LoaderCircle, Palette, PauseCircle, Save, ShieldCheck, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, Lock, Users, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LoaderCircle, Palette, PauseCircle, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { Alert, PageHead } from "@/components/ui";
 import { FormSkeleton } from "@/components/skeleton";
-import { PreferencesSection } from "@/components/preferences-section";
 import { SectionTabs, type SectionTab } from "@/components/section-tabs";
 import { WorkspaceDomainSection } from "@/components/settings/workspace-domain";
 import { McpAccessSection } from "@/components/settings/mcp-access";
@@ -13,6 +12,8 @@ import { IntegrationAccessSection } from "@/components/settings/integration-acce
 import { TeamSection } from "@/components/settings/team-section";
 import { isManager, useCurrentUser } from "@/lib/current-user";
 import { AppLinks } from "@/components/app-links";
+import { KeyActions } from "@/components/key-actions";
+import { PhoneAccounts } from "@/components/phone-accounts";
 import { useToast } from "@/components/toast";
 import { api, messageFrom } from "@/lib/api";
 import { currentSections, showSections } from "@/lib/section-path";
@@ -20,10 +21,10 @@ import { useT, type TranslateFn } from "@/lib/i18n";
 import { PROVIDERS } from "@/lib/providers";
 import type { Agency, Provider, ProviderTest } from "@/types";
 
-type SettingsTab = "identity" | "domain" | "team" | "security" | "providers" | "preferences" | "integrations" | "agents";
-const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "providers", "integrations", "preferences", "agents"];
+type SettingsTab = "identity" | "domain" | "team" | "security" | "providers" | "integrations" | "agents";
+const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "providers", "integrations", "agents"];
 // What an operator or a viewer sees: their own account, and the team.
-const PERSONAL_TABS: SettingsTab[] = ["team", "security", "preferences"];
+const PERSONAL_TABS: SettingsTab[] = ["team", "security"];
 
 export default function SettingsPage() {
   const t = useT();
@@ -46,7 +47,6 @@ export default function SettingsPage() {
     { id: "security", label: t("settings.tabs.security"), icon: Lock },
     { id: "integrations", label: t("tools.tab"), icon: KeyRound },
     { id: "providers", label: t("settings.tabs.providers"), icon: KeyRound },
-    { id: "preferences", label: t("settings.tabs.preferences"), icon: SlidersHorizontal },
     { id: "agents", label: t("settings.tabs.agents"), icon: Bot },
   ];
   const visibleTabs = tabs.filter((item) => available.includes(item.id));
@@ -128,9 +128,9 @@ export default function SettingsPage() {
       ))}
     </section>}
 
-    {tab === "preferences" && <PreferencesSection />}
-
     {tab === "integrations" && <IntegrationAccessSection />}
+
+    {tab === "providers" && <PhoneAccounts />}
 
     {tab === "agents" && <McpAccessSection />}
   </div>;
@@ -164,18 +164,18 @@ function ProviderKeyCard({ preset, state, busy, onSave, onRemove, onToggle, t }:
 
   return (
     <section className="form-section"><div className="section-copy"><h2>{preset.label}</h2><p>{t("settings.providers.byo", { label: preset.label })}</p><a className="text-button" href={preset.keyUrl} target="_blank" rel="noopener noreferrer">{t("settings.providers.getKey")}</a></div>
-      <div className="form-fields">
+      <div className="form-fields key-form">
         {configured ? (
           <div className="key-configured">
-            <span className="key-configured-status">{enabled ? <CheckCircle2 size={18} /> : <PauseCircle size={18} />} {t(enabled ? "settings.providers.configured" : "settings.providers.paused", { label: preset.label })}</span>
-            <label className="switch-row"><span><strong>{t("settings.providers.useKey")}</strong><small>{t("settings.providers.useKeyHint")}</small></span><input type="checkbox" checked={enabled} disabled={busy} onChange={(e) => onToggle(preset.id, e.target.checked)} /></label>
+            <div className="key-configured-head">
+              <span className="key-configured-status">{enabled ? <CheckCircle2 size={18} /> : <PauseCircle size={18} />} {t(enabled ? "settings.providers.configured" : "settings.providers.paused", { label: preset.label })}</span>
+              <KeyActions busy={busy} replaceLabel={t("settings.providers.replace")} removeLabel={t("settings.providers.remove")} confirmTitle={t("settings.providers.removeTitle", { label: preset.label })} confirmMessage={t("settings.providers.removeCopy")} toggle={{ checked: enabled, label: t("settings.providers.useKey"), hint: t("settings.providers.useKeyHint"), confirm: (on) => on
+                ? { title: t("settings.providers.resumeTitle", { label: preset.label }), message: t("settings.providers.resumeCopy", { label: preset.label }), label: t("settings.providers.resumeConfirm") }
+                : { title: t("settings.providers.pauseTitle", { label: preset.label }), message: t("settings.providers.pauseCopy"), label: t("settings.providers.pauseConfirm") }, onChange: (on) => onToggle(preset.id, on) }} onReplace={() => { setKey(""); setReplacing(true); }} onRemove={() => onRemove(preset.id)} />
+            </div>
             {!enabled && !state?.configured && <Alert type="error">{t("settings.providers.pausedNothingAnswers")}</Alert>}
             {verification && <Alert type={verificationError ? "error" : "success"}>{verification}</Alert>}
-            <div className="key-configured-actions">
-              <button type="button" className="button secondary" disabled={busy || testing} onClick={() => void verify()}>{testing ? <LoaderCircle className="spin" size={15} /> : <CheckCircle2 size={15} />} {t("tools.catalog.verifyProvider")}</button>
-              <button type="button" className="button ghost" disabled={busy} onClick={() => { setKey(""); setReplacing(true); }}>{t("settings.providers.replace")}</button>
-              <button type="button" className="button danger" disabled={busy} onClick={() => onRemove(preset.id)}><Trash2 size={15} /> {t("settings.providers.remove")}</button>
-            </div>
+            <div className="form-footer"><button type="button" className="button secondary" disabled={busy || testing} onClick={() => void verify()}>{testing ? <LoaderCircle className="spin" size={15} /> : <CheckCircle2 size={15} />} {t("tools.catalog.verifyProvider")}</button></div>
           </div>
         ) : (
           <>

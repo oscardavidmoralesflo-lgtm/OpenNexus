@@ -3,7 +3,7 @@ import uuid
 from io import BytesIO
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 from sqlalchemy import delete, func, select
@@ -12,15 +12,22 @@ from sqlalchemy.orm import Session, joinedload
 from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_user
-from ..models import Agent, AgentCaptureField, AgentQA, AgentTool, Client, EscalationRule, KnowledgeChunk, KnowledgeDocument, PortalUser, Team, User, WhatsAppChannel, WhatsAppCloudChannel, WidgetChannel, now_utc
+from ..models import Agent, AgentCaptureField, AgentMediaAsset, AgentQA, AgentTool, Client, EscalationRule, KnowledgeChunk, KnowledgeDocument, PortalUser, Team, User, WhatsAppChannel, WhatsAppCloudChannel, WidgetChannel, now_utc
 from ..schemas import (
     AgentCreate, AgentOut, AgentPromptOut, AgentUpdate, CaptureConfigIn, CaptureConfigOut, CaptureFieldOut, ContactFieldOut,
-    DocumentOut, EscalationConfigIn, EscalationConfigOut, FollowUpConfigIn, FollowUpConfigOut, QAPairCreate, QAPairOut,
+    DocumentOut, EscalationConfigIn, EscalationConfigOut, FollowUpConfigIn, FollowUpConfigOut, MediaAssetOut, MediaAssetUpdate,
+    QAPairCreate, QAPairOut,
     check_reply_delay,
 )
+from ..services import phone_calls
 from ..services.capture import CAPTURE_CHANNELS, field_definitions
 from ..services.follow_ups import FOLLOW_UP_CHANNELS, MAX_MINUTES, MIN_MINUTES, check_schedule
 from ..services.knowledge import build_system_prompt, embed_document_chunks, reindex_agent, reindex_document
+from ..services.attachments import content_disposition, is_inline_safe
+from ..services.media_library import (
+    MAX_DESCRIPTION_CHARS, MAX_FILE_UPLOAD_BYTES, MAX_MEDIA_ASSETS, MAX_NAME_CHARS, MediaValidationError, guess_mime, normalize_upload,
+    upload_limit,
+)
 
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
@@ -48,8 +55,9 @@ def _validate_client(db: Session, user: User, client_id: uuid.UUID) -> None:
 
 def _channels_of(db: Session, agent: Agent) -> list[WhatsAppChannel | WhatsAppCloudChannel | WidgetChannel]:
     """Every channel this agent answers: both WhatsApp lines and the web chat."""
-    from ..models import SocialChannel
+    from ..models import PhoneChannel, SocialChannel
     return [
+        *db.scalars(select(PhoneChannel).where(PhoneChannel.agent_id == agent.id)).all(),
         *db.scalars(select(SocialChannel).where(SocialChannel.agent_id == agent.id)).all(),
         *db.scalars(select(WhatsAppChannel).where(WhatsAppChannel.agent_id == agent.id)).all(),
         *db.scalars(select(WhatsAppCloudChannel).where(WhatsAppCloudChannel.agent_id == agent.id)).all(),
@@ -67,10 +75,26 @@ def list_agents(db: Session = Depends(get_db), user: User = Depends(get_current_
     ).unique().all()
 
 
+def _check_voice_model(model: str) -> None:
+    try:
+        phone_calls.check_voice_model(model)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _transfer_number(value: str | None) -> str | None:
+    try:
+        return phone_calls.transfer_number(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("", response_model=AgentOut, status_code=status.HTTP_201_CREATED)
 def create_agent(payload: AgentCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _validate_client(db, user, payload.client_id)
-    agent = Agent(agency_id=user.agency_id, **payload.model_dump())
+    if payload.kind == "voice":
+        _check_voice_model(payload.model)
+    agent = Agent(agency_id=user.agency_id, **payload.model_dump(exclude={"transfer_number"}), transfer_number=_transfer_number(payload.transfer_number))
     client = db.get(Client, payload.client_id)
     if client is not None and client.is_sandbox:
         # Prospects reach a sandbox agent by its code.
@@ -87,7 +111,7 @@ def get_agent(agent_id: uuid.UUID, db: Session = Depends(get_db), user: User = D
 
 
 @router.patch("/{agent_id}", response_model=AgentOut)
-def update_agent(agent_id: uuid.UUID, payload: AgentUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+async def update_agent(agent_id: uuid.UUID, payload: AgentUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     agent = _agent(db, user, agent_id)
     values = payload.model_dump(exclude_unset=True)
     client_id = values.get("client_id", agent.client_id)
@@ -104,9 +128,16 @@ def update_agent(agent_id: uuid.UUID, payload: AgentUpdate, db: Session = Depend
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if agent.kind == "voice" and "model" in values:
+        _check_voice_model(values["model"])
+    if "transfer_number" in values:
+        values["transfer_number"] = _transfer_number(values["transfer_number"])
     for key, value in values.items():
         setattr(agent, key, value)
     db.commit()
+    if agent.kind == "voice" and phone_calls.AGENT_LINE_FIELDS & values.keys():
+        # Written into ElevenLabs a moment later: the save does not wait on it.
+        phone_calls.refresh_lines_soon(db, agent_id=agent.id)
     return _agent(db, user, agent_id)
 
 
@@ -231,6 +262,7 @@ async def upload_document(
             await embed_document_chunks(db, agent, document)
         except Exception:
             db.rollback()
+        phone_calls.refresh_lines_soon(db, agent_id=agent.id)
     return _document_out(document)
 
 
@@ -267,6 +299,126 @@ def delete_document(agent_id: uuid.UUID, document_id: uuid.UUID, db: Session = D
         raise HTTPException(status_code=404, detail="Document not found")
     db.delete(document)
     db.commit()
+    phone_calls.refresh_lines_soon(db, agent_id=agent.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Media library: files the agent can send -------------------------------
+
+
+def _media_asset(db: Session, agent: Agent, asset_id: uuid.UUID) -> AgentMediaAsset:
+    asset = db.scalar(select(AgentMediaAsset).where(AgentMediaAsset.id == asset_id, AgentMediaAsset.agent_id == agent.id))
+    if not asset:
+        raise HTTPException(status_code=404, detail="File not found")
+    return asset
+
+
+def _check_media_name(db: Session, agent: Agent, name: str, *, except_id: uuid.UUID | None = None) -> str:
+    """The name is what the model picks from, so it is required and unique
+    per agent, ignoring case."""
+    name = " ".join(name.split())
+    if not name:
+        raise HTTPException(status_code=422, detail="Give the file a name")
+    if len(name) > MAX_NAME_CHARS:
+        raise HTTPException(status_code=422, detail=f"The name can have at most {MAX_NAME_CHARS} characters")
+    clash = db.scalar(
+        select(AgentMediaAsset.id).where(
+            AgentMediaAsset.agent_id == agent.id, func.lower(AgentMediaAsset.name) == name.lower(),
+            AgentMediaAsset.id != except_id if except_id else True,
+        )
+    )
+    if clash:
+        raise HTTPException(status_code=409, detail="Another file of this agent already has that name")
+    return name
+
+
+@router.get("/{agent_id}/media", response_model=list[MediaAssetOut])
+def list_media(agent_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    agent = _agent(db, user, agent_id)
+    return db.scalars(
+        select(AgentMediaAsset).where(AgentMediaAsset.agent_id == agent.id).order_by(AgentMediaAsset.created_at)
+    ).all()
+
+
+@router.post("/{agent_id}/media", response_model=MediaAssetOut, status_code=status.HTTP_201_CREATED)
+async def upload_media(
+    agent_id: uuid.UUID,
+    file: UploadFile = File(...),
+    name: str = Form(...),
+    description: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    agent = _agent(db, user, agent_id)
+    count = db.scalar(select(func.count()).select_from(AgentMediaAsset).where(AgentMediaAsset.agent_id == agent.id)) or 0
+    if count >= MAX_MEDIA_ASSETS:
+        raise HTTPException(status_code=409, detail=f"This agent already has {MAX_MEDIA_ASSETS} files, the maximum. Remove one first.")
+    name = _check_media_name(db, agent, name)
+    description = " ".join(description.split())
+    if len(description) > MAX_DESCRIPTION_CHARS:
+        raise HTTPException(status_code=422, detail=f"The description can have at most {MAX_DESCRIPTION_CHARS} characters")
+    data = await file.read(MAX_FILE_UPLOAD_BYTES + 1)
+    if not data:
+        raise HTTPException(status_code=400, detail="The file is empty")
+    mime = guess_mime(file.content_type, file.filename, data)
+    limit = upload_limit(mime)
+    if len(data) > limit:
+        raise HTTPException(status_code=413, detail=f"The file exceeds the {limit // (1024 * 1024)} MB limit")
+    try:
+        normalized = normalize_upload(data, mime, file.filename)
+    except MediaValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    asset = AgentMediaAsset(
+        agent_id=agent.id, name=name, description=description, kind=normalized.kind, mime=normalized.mime,
+        filename=normalized.filename, size_bytes=len(normalized.data), data=normalized.data,
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+@router.patch("/{agent_id}/media/{asset_id}", response_model=MediaAssetOut)
+def update_media(
+    agent_id: uuid.UUID, asset_id: uuid.UUID, payload: MediaAssetUpdate,
+    db: Session = Depends(get_db), user: User = Depends(get_current_user),
+):
+    agent = _agent(db, user, agent_id)
+    asset = _media_asset(db, agent, asset_id)
+    if payload.name is not None:
+        asset.name = _check_media_name(db, agent, payload.name, except_id=asset.id)
+    if payload.description is not None:
+        asset.description = " ".join(payload.description.split())
+    asset.updated_at = now_utc()
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+@router.get("/{agent_id}/media/{asset_id}/content")
+def media_content(agent_id: uuid.UUID, asset_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """The stored bytes, for the preview in the library. Images render inline;
+    anything else downloads."""
+    agent = _agent(db, user, agent_id)
+    asset = _media_asset(db, agent, asset_id)
+    inline = is_inline_safe(asset.mime)
+    return Response(
+        content=asset.data,
+        media_type=asset.mime if inline else "application/octet-stream",
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "Vary": "Origin",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": content_disposition(asset.filename, inline=inline),
+        },
+    )
+
+
+@router.delete("/{agent_id}/media/{asset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_media(agent_id: uuid.UUID, asset_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    agent = _agent(db, user, agent_id)
+    db.delete(_media_asset(db, agent, asset_id))
+    db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -284,6 +436,7 @@ def create_qa(agent_id: uuid.UUID, payload: QAPairCreate, db: Session = Depends(
     db.add(pair)
     db.commit()
     db.refresh(pair)
+    phone_calls.refresh_lines_soon(db, agent_id=agent.id)
     return pair
 
 
@@ -295,6 +448,7 @@ def delete_qa(agent_id: uuid.UUID, qa_id: uuid.UUID, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Q&A pair not found")
     db.delete(pair)
     db.commit()
+    phone_calls.refresh_lines_soon(db, agent_id=agent.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 def _rule_out(rule: EscalationRule) -> dict:
@@ -376,6 +530,7 @@ def replace_escalation_config(
             )
         )
     db.commit()
+    phone_calls.refresh_lines_soon(db, agent_id=agent.id)
     return _escalation_out(db, agent)
 
 
@@ -428,6 +583,7 @@ def replace_capture_config(
         db.add(AgentCaptureField(agent_id=agent.id, field_key=item.field_key, channels=list(item.channels), position=position))
     db.commit()
     db.refresh(agent)
+    phone_calls.refresh_lines_soon(db, agent_id=agent.id)
     return _capture_out(db, agent)
 
 
@@ -502,7 +658,7 @@ class VoicePreviewIn(BaseModel):
 def _humanization_out(agent: Agent) -> HumanizationConfig:
     return HumanizationConfig(
         split_replies=agent.split_replies, split_max_parts=agent.split_max_parts, typing_speed_cps=agent.typing_speed_cps,
-        style_mirror=agent.style_mirror, voice_replies=agent.voice_replies, voice_model=agent.voice_model, voice_name=agent.voice_name,
+        style_mirror=agent.style_mirror, voice_replies=agent.voice_replies, voice_model=agent.voice_model, voice_name=agent.voice_note_voice,
     )
 
 
@@ -515,7 +671,7 @@ def get_humanization(agent_id: uuid.UUID, db: Session = Depends(get_db), user: U
 def set_humanization(agent_id: uuid.UUID, payload: HumanizationConfig, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     agent = _agent(db, user, agent_id)
     for key, value in payload.model_dump().items():
-        setattr(agent, key, value.strip() if isinstance(value, str) else value)
+        setattr(agent, "voice_note_voice" if key == "voice_name" else key, value.strip() if isinstance(value, str) else value)
     db.commit()
     return _humanization_out(agent)
 
@@ -535,7 +691,7 @@ async def preview_voice(agent_id: uuid.UUID, payload: VoicePreviewIn, db: Sessio
     voice_provider, base_url, api_key, model = resolved
     credentials = (base_url, api_key)
     try:
-        audio, mime, usage = await humanize.synthesize(*credentials, model, payload.voice_name.strip() or agent.voice_name, payload.text)
+        audio, mime, usage = await humanize.synthesize(*credentials, model, payload.voice_name.strip() or agent.voice_note_voice, payload.text)
     except Exception as exc:  # noqa: BLE001 - the provider's message helps pick another voice
         raise HTTPException(status_code=502, detail=f"The voice could not be generated: {str(exc)[:300]}") from exc
     record = record_usage(db, agent.agency_id, agent.id, voice_provider, model, usage, purpose="voice")

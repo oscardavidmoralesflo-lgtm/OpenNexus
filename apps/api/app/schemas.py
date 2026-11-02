@@ -121,6 +121,7 @@ class AgentSummary(ORMModel):
     id: uuid.UUID
     name: str
     is_active: bool
+    kind: str = "chat"
 
 
 class ClientOut(ORMModel):
@@ -300,6 +301,13 @@ class AgentBase(BaseModel):
     # On duty only inside these slots when enabled (see services.availability).
     schedule_enabled: bool = False
     schedule_slots: list[ScheduleSlot] = []
+    # Fixed at creation: a chat agent answers messages, a voice agent calls.
+    kind: Literal["chat", "voice"] = "chat"
+    voice_id: str = Field(default="", max_length=80)
+    voice_name: str = Field(default="", max_length=180)
+    greeting: str = Field(default="", max_length=600)
+    transfer_number: str | None = Field(default=None, max_length=32)
+    transfer_when: str = Field(default="", max_length=600)
 
     @model_validator(mode="after")
     def _reply_delay_bounds(self) -> "AgentBase":
@@ -339,6 +347,11 @@ class AgentUpdate(BaseModel):
     is_active: bool | None = None
     schedule_enabled: bool | None = None
     schedule_slots: list[ScheduleSlot] | None = None
+    voice_id: str | None = Field(default=None, max_length=80)
+    voice_name: str | None = Field(default=None, max_length=180)
+    greeting: str | None = Field(default=None, max_length=600)
+    transfer_number: str | None = Field(default=None, max_length=32)
+    transfer_when: str | None = Field(default=None, max_length=600)
 
 
 class AgentOut(ORMModel):
@@ -371,6 +384,12 @@ class AgentOut(ORMModel):
     is_active: bool
     schedule_enabled: bool
     schedule_slots: list[ScheduleSlot]
+    kind: str
+    voice_id: str
+    voice_name: str
+    greeting: str
+    transfer_number: str | None = None
+    transfer_when: str = ""
     created_at: datetime
     updated_at: datetime
     client: ClientOut
@@ -418,6 +437,22 @@ class DocumentOut(ORMModel):
     # Embedding model of the stored chunks, or None when nothing is indexed.
     indexed_model: str | None = None
     chunk_count: int = 0
+
+
+class MediaAssetOut(ORMModel):
+    id: uuid.UUID
+    name: str
+    description: str
+    kind: str
+    mime: str
+    filename: str
+    size_bytes: int
+    created_at: datetime
+
+
+class MediaAssetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=300)
 
 
 class EmbeddingModelOut(BaseModel):
@@ -533,8 +568,19 @@ class ConversationSummaryRequest(BaseModel):
     language: Literal["es", "en"] = "es"
 
 
+class PhoneCallOut(ORMModel):
+    caller: str | None = None
+    started_at: datetime
+    ended_at: datetime | None = None
+    duration_seconds: int | None = None
+    cost_usd: float | None = None
+    summary: str | None = None
+
+
 class ConversationDetail(ConversationOut):
     messages: list[MessageOut] = []
+    # The call a phone conversation was; None on every other channel.
+    phone_call: PhoneCallOut | None = None
 
 
 class ConversationInboxOut(BaseModel):
@@ -1151,6 +1197,7 @@ class PortalSessionOut(BaseModel):
     # The person behind the session; absent on sessions that predate portal users.
     user_id: uuid.UUID | None = None
     user_name: str | None = None
+    user_email: str | None = None
     # What this person may do. Empty for a session with no person behind it.
     role: str | None = None
     permissions: list[str] = []
@@ -1192,6 +1239,8 @@ class ReportTotals(BaseModel):
     input_tokens: int
     output_tokens: int
     avg_cost_per_reply_usd: float
+    # Replies whose cost the provider did not report, priced at list price.
+    estimated_replies: int = 0
 
 
 class ReportGroup(BaseModel):
