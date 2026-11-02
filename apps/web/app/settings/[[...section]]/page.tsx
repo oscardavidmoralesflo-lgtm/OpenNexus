@@ -1,10 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Bot, CheckCircle2, Lock, Users, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LoaderCircle, Palette, PauseCircle, Save, ShieldCheck, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, Lock, Users, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LoaderCircle, Palette, PauseCircle, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { Alert, PageHead } from "@/components/ui";
 import { FormSkeleton } from "@/components/skeleton";
-import { PreferencesSection } from "@/components/preferences-section";
 import { SectionTabs, type SectionTab } from "@/components/section-tabs";
 import { WorkspaceDomainSection } from "@/components/settings/workspace-domain";
 import { McpAccessSection } from "@/components/settings/mcp-access";
@@ -22,10 +21,10 @@ import { useT, type TranslateFn } from "@/lib/i18n";
 import { PROVIDERS } from "@/lib/providers";
 import type { Agency, Provider, ProviderTest } from "@/types";
 
-type SettingsTab = "identity" | "domain" | "team" | "security" | "providers" | "preferences" | "integrations" | "agents";
-const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "providers", "integrations", "preferences", "agents"];
+type SettingsTab = "identity" | "domain" | "team" | "security" | "providers" | "integrations" | "agents";
+const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "providers", "integrations", "agents"];
 // What an operator or a viewer sees: their own account, and the team.
-const PERSONAL_TABS: SettingsTab[] = ["team", "security", "preferences"];
+const PERSONAL_TABS: SettingsTab[] = ["team", "security"];
 
 export default function SettingsPage() {
   const t = useT();
@@ -48,7 +47,6 @@ export default function SettingsPage() {
     { id: "security", label: t("settings.tabs.security"), icon: Lock },
     { id: "integrations", label: t("tools.tab"), icon: KeyRound },
     { id: "providers", label: t("settings.tabs.providers"), icon: KeyRound },
-    { id: "preferences", label: t("settings.tabs.preferences"), icon: SlidersHorizontal },
     { id: "agents", label: t("settings.tabs.agents"), icon: Bot },
   ];
   const visibleTabs = tabs.filter((item) => available.includes(item.id));
@@ -129,8 +127,6 @@ export default function SettingsPage() {
         <ProviderKeyCard key={preset.id} preset={preset} state={providers.find((x) => x.provider === preset.id)} busy={busy} onSave={saveKey} onRemove={removeKey} onToggle={toggleKey} t={t} />
       ))}
     </section>}
-
-    {tab === "preferences" && <PreferencesSection />}
 
     {tab === "integrations" && <IntegrationAccessSection />}
 

@@ -245,7 +245,10 @@ class Agent(Base):
     # Voice notes: "off", "mirror" (when the customer sent one) or "always".
     voice_replies: Mapped[str] = mapped_column(String(10), default="off", server_default="off")
     voice_model: Mapped[str] = mapped_column(String(180), default="", server_default="")
-    voice_name: Mapped[str] = mapped_column(String(60), default="", server_default="")
+    # The TTS voice for voice notes (e.g. "nova"). Its API field stays
+    # ``voice_name`` on the humanization routes; the column was renamed so the
+    # phone agents' ``voice_name`` could take that name.
+    voice_note_voice: Mapped[str] = mapped_column(String(60), default="", server_default="")
     # Whether the agent may resolve a conversation itself once the contact's
     # request is settled, instead of leaving it open until it goes idle.
     resolve_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")

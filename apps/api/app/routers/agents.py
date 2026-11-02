@@ -658,7 +658,7 @@ class VoicePreviewIn(BaseModel):
 def _humanization_out(agent: Agent) -> HumanizationConfig:
     return HumanizationConfig(
         split_replies=agent.split_replies, split_max_parts=agent.split_max_parts, typing_speed_cps=agent.typing_speed_cps,
-        style_mirror=agent.style_mirror, voice_replies=agent.voice_replies, voice_model=agent.voice_model, voice_name=agent.voice_name,
+        style_mirror=agent.style_mirror, voice_replies=agent.voice_replies, voice_model=agent.voice_model, voice_name=agent.voice_note_voice,
     )
 
 
@@ -671,7 +671,7 @@ def get_humanization(agent_id: uuid.UUID, db: Session = Depends(get_db), user: U
 def set_humanization(agent_id: uuid.UUID, payload: HumanizationConfig, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     agent = _agent(db, user, agent_id)
     for key, value in payload.model_dump().items():
-        setattr(agent, key, value.strip() if isinstance(value, str) else value)
+        setattr(agent, "voice_note_voice" if key == "voice_name" else key, value.strip() if isinstance(value, str) else value)
     db.commit()
     return _humanization_out(agent)
 
@@ -691,7 +691,7 @@ async def preview_voice(agent_id: uuid.UUID, payload: VoicePreviewIn, db: Sessio
     voice_provider, base_url, api_key, model = resolved
     credentials = (base_url, api_key)
     try:
-        audio, mime, usage = await humanize.synthesize(*credentials, model, payload.voice_name.strip() or agent.voice_name, payload.text)
+        audio, mime, usage = await humanize.synthesize(*credentials, model, payload.voice_name.strip() or agent.voice_note_voice, payload.text)
     except Exception as exc:  # noqa: BLE001 - the provider's message helps pick another voice
         raise HTTPException(status_code=502, detail=f"The voice could not be generated: {str(exc)[:300]}") from exc
     record = record_usage(db, agent.agency_id, agent.id, voice_provider, model, usage, purpose="voice")

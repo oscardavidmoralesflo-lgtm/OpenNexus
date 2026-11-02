@@ -8,8 +8,8 @@ tables and columns with defaults, nothing else moves."""
 from alembic import op
 import sqlalchemy as sa
 
-revision = "0066_phone_calls"
-down_revision = "0065_agent_media_assets"
+revision = "0067_phone_calls"
+down_revision = "0066_voice_note_voice"
 branch_labels = None
 depends_on = None
 

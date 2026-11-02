@@ -769,7 +769,7 @@ async def _deliver_humanized(db: Session, channel, conversation: Conversation, r
         credentials = (resolved_voice[1], resolved_voice[2]) if resolved_voice else None
         if spoken and credentials:
             try:
-                audio, mime, usage = await humanize.synthesize(*credentials, resolved_voice[3], agent.voice_name, spoken)
+                audio, mime, usage = await humanize.synthesize(*credentials, resolved_voice[3], agent.voice_note_voice, spoken)
             except Exception:  # noqa: BLE001 - a voice that fails falls back to text
                 audio = None
             if audio:
