@@ -31,6 +31,12 @@ Un propietario puede **exigir la verificación en dos pasos** a todo el equipo e
 **Configuración → Equipo → Política de seguridad**. Quien no la tenga es enviado a
 Seguridad y no puede usar nada más hasta configurarla.
 
+## Registro de actividad
+
+**Configuración → Actividad** muestra cada cambio hecho en el panel y cada inicio de sesión, del más reciente al más antiguo: cuándo pasó, quién lo hizo, qué cambió y desde qué dirección IP. Los inicios de sesión fallidos de una cuenta real aparecen en rojo. Lo leen owners y admins; operadores y lectores no.
+
+Cada escritura exitosa en la API del panel se registra sola, así que las funciones nuevas quedan cubiertas sin trabajo extra. Se dejan fuera el trabajo de rutina de la bandeja (enviar una respuesta, reaccionar, marcar como leída) y las pruebas que solo verifican una clave. El registro se lee en `GET /api/audit` (filtros `limit`, `offset`, prefijo `action` y correo `actor`).
+
 ## Instalación inicial
 
 Define `SETUP_TOKEN` en un despliegue público: el formulario inicial lo pide, así

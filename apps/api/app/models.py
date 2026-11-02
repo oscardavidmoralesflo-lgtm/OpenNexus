@@ -1504,3 +1504,28 @@ class Invitation(Base):
 
     agency: Mapped[Agency] = relationship()
     invited_by: Mapped["User | None"] = relationship()
+
+
+class AuditEvent(Base):
+    """One change a signed-in person made in the agency's dashboard, kept as
+    a record of who did what and when. Written for every successful write to
+    the dashboard API and for each sign-in; never edited afterwards."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (Index("ix_audit_events_agency_created", "agency_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"))
+    # Kept when the person is removed later: the email is a snapshot.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_email: Mapped[str] = mapped_column(String(320), default="")
+    # A dotted name such as ``agents.update`` or ``auth.sign_in``.
+    action: Mapped[str] = mapped_column(String(120))
+    method: Mapped[str] = mapped_column(String(10), default="")
+    path: Mapped[str] = mapped_column(String(500), default="")
+    status_code: Mapped[int] = mapped_column(Integer, default=0)
+    # The first id in the path, when there is one: the thing the change touched.
+    target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ip: Mapped[str] = mapped_column(String(64), default="")
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

@@ -8,12 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import new_session
 from .services.conversation_state import resolve_idle_ai_conversations
+from .services.audit import AuditTrailMiddleware
 from .services.team_roles import enforce as enforce_role_policy
 from .routers import (
     account,
     agency,
     agent_tools,
     agents,
+    audit,
     auth,
     billing,
     catalog,
@@ -110,6 +112,8 @@ app = FastAPI(
     # Roles and the agency's two-step policy apply to every dashboard route.
     dependencies=[Depends(enforce_role_policy)],
 )
+# Every successful dashboard write lands in the agency's audit log.
+app.add_middleware(AuditTrailMiddleware)
 app.add_middleware(
     CORSMiddleware,
     # The configured frontend origin (a real domain in production) plus any
@@ -130,6 +134,7 @@ def health():
 app.include_router(auth.router, prefix="/api")
 app.include_router(team.public_router, prefix="/api")
 app.include_router(team.router, prefix="/api")
+app.include_router(audit.router, prefix="/api")
 app.include_router(account.router, prefix="/api")
 app.include_router(agency.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")

@@ -1,7 +1,7 @@
 import hmac
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -9,9 +9,10 @@ from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_user
 from ..models import Agency, User
-from ..ratelimit import login_rate_limit
+from ..ratelimit import client_ip, login_rate_limit
 from ..schemas import LoginRequest, RegisterRequest, TwoFactorLogin, UserOut
 from ..security import create_access_token, create_two_factor_challenge, decode_two_factor_challenge, hash_password, verify_password
+from ..services import audit
 from ..slugs import unique_slug
 
 
@@ -86,20 +87,34 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
 
 
 @router.post("/login", response_model=None, dependencies=[Depends(login_rate_limit)])
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == payload.email.lower()))
     if not user or not verify_password(payload.password, user.password_hash):
+        if user is not None:
+            # A wrong password for a real account is worth seeing in the log.
+            _record_sign_in(db, request, user, "auth.sign_in_failed", 401)
+            db.commit()
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     if user.totp_enabled:
         # The password was right; the session waits for the second step.
         return {"two_factor_required": True, "challenge": create_two_factor_challenge(str(user.id))}
-    return _signed_in(db, response, user)
+    return _signed_in(db, response, user, request)
 
 
-def _signed_in(db: Session, response: Response, user: User) -> UserOut:
+def _record_sign_in(db: Session, request: Request | None, user: User, action: str, status_code: int) -> None:
+    audit.record(
+        db, agency_id=user.agency_id, user=user, action=action,
+        method=request.method if request else "", path=request.url.path if request else "",
+        status_code=status_code, ip=client_ip(request) if request else "",
+        user_agent=request.headers.get("user-agent", "") if request else "",
+    )
+
+
+def _signed_in(db: Session, response: Response, user: User, request: Request | None = None) -> UserOut:
     from ..models import now_utc
 
     user.last_login_at = now_utc()
+    _record_sign_in(db, request, user, "auth.sign_in", 200)
     db.commit()
     db.refresh(user)
     _set_session_cookie(response, user)
@@ -107,7 +122,7 @@ def _signed_in(db: Session, response: Response, user: User) -> UserOut:
 
 
 @router.post("/login/2fa", response_model=UserOut, dependencies=[Depends(login_rate_limit)])
-def login_second_step(payload: TwoFactorLogin, response: Response, db: Session = Depends(get_db)):
+def login_second_step(payload: TwoFactorLogin, request: Request, response: Response, db: Session = Depends(get_db)):
     from ..services.account_security import check_second_factor
 
     user_id = decode_two_factor_challenge(payload.challenge)
@@ -115,8 +130,10 @@ def login_second_step(payload: TwoFactorLogin, response: Response, db: Session =
     if user is None or not user.totp_enabled:
         raise HTTPException(status_code=401, detail="The sign-in expired. Enter your password again.")
     if not check_second_factor(db, user, payload.code):
+        _record_sign_in(db, request, user, "auth.sign_in_failed", 401)
+        db.commit()
         raise HTTPException(status_code=401, detail="That code is not valid")
-    return _signed_in(db, response, user)
+    return _signed_in(db, response, user, request)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

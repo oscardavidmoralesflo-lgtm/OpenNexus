@@ -59,6 +59,10 @@ export type AgencyMember = { id: string; name: string; email: string; role: Team
 export type TeamInvitation = { id: string; email: string; role: TeamRole; invited_by: string | null; expires_at: string; created_at: string };
 export type TeamInvitationCreated = TeamInvitation & { link: string };
 export type AgencyTeam = { members: AgencyMember[]; invitations: TeamInvitation[]; require_two_factor: boolean; your_role: TeamRole };
+
+export type AuditEvent = { id: string; action: string; actor_email: string; method: string; path: string; status_code: number; target_id: string | null; ip: string; user_agent: string; created_at: string };
+export type AuditPage = { events: AuditEvent[]; has_more: boolean };
+
 export type TwoFactorStatus = { enabled: boolean; recovery_codes_left: number; required_by_agency: boolean };
 export type TwoFactorSetup = { secret: string; otpauth_uri: string; qr_svg: string };
 
