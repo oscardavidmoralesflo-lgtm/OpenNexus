@@ -53,7 +53,7 @@ En lugar de la ruta compartida `/portal/<slug>`, puedes apuntar el portal a un d
 
 1. En la configuración del cliente, define el dominio propio (p. ej. `support.acme.com`). Al guardarlo se reinicia la verificación y se emite un token de desafío nuevo.
 2. Crea un registro DNS **TXT** en `_opennexus-challenge.<domain>` con el valor del token que aparece en la configuración.
-3. Haz clic en **Verificar**. OpenNexus resuelve el registro TXT; en cuanto coincide con el token, el dominio se marca como verificado.
+3. Haz clic en **Verificar**. Agentaria resuelve el registro TXT; en cuanto coincide con el token, el dominio se marca como verificado.
 4. Apunta el dominio a tu servidor (un registro A/AAAA o CNAME para `support.acme.com`).
 5. Asegúrate de que la pasarela de TLS bajo demanda esté habilitada (ver más abajo) — el certificado se obtiene automáticamente en la primera petición.
 

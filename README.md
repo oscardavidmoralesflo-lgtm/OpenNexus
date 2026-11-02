@@ -27,7 +27,7 @@
 
 ---
 
-One OpenNexus installation serves one agency. The agency creates AI agents for its
+One Agentaria installation serves one agency. The agency creates AI agents for its
 clients, gives each client a branded portal, and talks to end users over
 WhatsApp or an embeddable web chat widget. Bring your own OpenRouter key and
 self-host the whole thing with one command.
@@ -125,7 +125,7 @@ Deploying to a public server (reverse proxy, TLS, backups) is covered in
 
 ## Community & support
 
-- **[GitHub Discussions](https://github.com/oscardavidmoralesflo-lgtm/OpenNexus/discussions)** — questions, ideas and help building with OpenNexus.
+- **[GitHub Discussions](https://github.com/oscardavidmoralesflo-lgtm/OpenNexus/discussions)** — questions, ideas and help building with Agentaria.
 - **[GitHub Issues](https://github.com/oscardavidmoralesflo-lgtm/OpenNexus/issues)** — bugs and feature requests.
 
 ## Project structure
@@ -147,7 +147,7 @@ docker-compose.yml
 `apps/mobile` is an optional Expo app: the inbox a business you serve carries in
 their pocket, with conversations, takeover, replies, photos and voice notes. It
 is not installed with the platform and the server does not need it — nobody
-running OpenNexus has to build or deploy it to have everything working.
+running Agentaria has to build or deploy it to have everything working.
 
 It deliberately carries **no brand**: no name, no logo, no bundle identifier, no
 preset pointing at any hosted service. What ships is a working app and the
@@ -167,4 +167,4 @@ all code, identifiers, comments and docs are in English; end-user UI is localize
 
 [MIT](./LICENSE).
 
-OpenNexus is built on [OpenLivery](https://github.com/sarrazola/openlivery), released under the MIT License by the OpenLivery contributors. Their copyright notice is kept in [LICENSE](./LICENSE).
+Agentaria is built on [OpenLivery](https://github.com/sarrazola/openlivery), released under the MIT License by the OpenLivery contributors. Their copyright notice is kept in [LICENSE](./LICENSE).

@@ -2,7 +2,7 @@
 
 > Read in English: [contributing.md](../en/contributing.md)
 
-Docker es la forma más rápida de ejecutar OpenNexus, pero para el desarrollo diario normalmente querrás cada servicio corriendo en tu máquina con recarga en caliente. Esta guía cubre cómo ejecutar el backend, el frontend y el puente de WhatsApp localmente, las suites de pruebas, las migraciones y las convenciones del proyecto.
+Docker es la forma más rápida de ejecutar Agentaria, pero para el desarrollo diario normalmente querrás cada servicio corriendo en tu máquina con recarga en caliente. Esta guía cubre cómo ejecutar el backend, el frontend y el puente de WhatsApp localmente, las suites de pruebas, las migraciones y las convenciones del proyecto.
 
 ## Alcance de la instalación
 
@@ -94,7 +94,7 @@ Todo el código, los identificadores, los comentarios, los mensajes de commit y 
 
 ## Puntos de extensión
 
-Un despliegue que opere OpenNexus para terceros puede necesitar agregarle cosas
+Un despliegue que opere Agentaria para terceros puede necesitar agregarle cosas
 sin hacer fork. Estos son los lugares pensados para eso, y se mantienen estables
 a propósito; cambiar su forma es un breaking change y lleva una línea en el
 changelog:

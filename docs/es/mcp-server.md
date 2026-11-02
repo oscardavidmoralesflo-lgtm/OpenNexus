@@ -1,6 +1,6 @@
 # Agentes de IA por MCP
 
-OpenNexus también es un servidor [MCP](https://modelcontextprotocol.io). Claude
+Agentaria también es un servidor [MCP](https://modelcontextprotocol.io). Claude
 Code, Cursor, Codex o cualquier cliente MCP puede conectarse a tu espacio de
 trabajo y hacer lo mismo que haces en el panel: leer clientes y agentes, crear y
 afinar agentes, cargar conocimiento, conectar herramientas y probar respuestas.

@@ -1,6 +1,6 @@
 # Billing: plans and AI credit
 
-For an operator who hosts OpenNexus for an agency and charges for it. Off by
+For an operator who hosts Agentaria for an agency and charges for it. Off by
 default (`BILLING_ENABLED=false`): a self-hosted install that brings its own AI
 key needs none of this, and nothing changes for it.
 

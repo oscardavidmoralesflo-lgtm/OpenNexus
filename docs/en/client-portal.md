@@ -53,7 +53,7 @@ Instead of the shared `/portal/<slug>` path, you can point the portal at a domai
 
 1. In the client's settings, set the custom domain (e.g. `support.acme.com`). Saving it resets verification and issues a fresh challenge token.
 2. Create a DNS **TXT** record at `_opennexus-challenge.<domain>` with the token value shown in the settings.
-3. Click **Verify**. OpenNexus resolves the TXT record; once it matches the token, the domain is marked verified.
+3. Click **Verify**. Agentaria resolves the TXT record; once it matches the token, the domain is marked verified.
 4. Point the domain itself at your server (an A/AAAA or CNAME record for `support.acme.com`).
 5. Make sure the on-demand TLS gateway is enabled (see below) — the certificate is then obtained automatically on the first request.
 
