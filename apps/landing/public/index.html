@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Agentaria · Agentes de IA para agencias</title>
+<meta name="description" content="Crea agentes de IA que atienden a los clientes de tu agencia por WhatsApp, Instagram, Messenger, web y llamadas, con tu marca y un portal para cada cliente.">
+<meta property="og:title" content="Agentaria · Agentes de IA para agencias">
+<meta property="og:description" content="Crea agentes de IA que atienden a los clientes de tu agencia por WhatsApp, Instagram, Messenger, web y llamadas, con tu marca y un portal para cada cliente.">
+<meta property="og:type" content="website">
+<link rel="icon" href="./agentaria-mark.svg" type="image/svg+xml">
+<link rel="alternate" hreflang="es" href="./">
+<link rel="alternate" hreflang="en" href="./en/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap">
+<style>
+/* Layout: a navy hero band with the product shown, then light sections that
+   answer a buyer's questions in order: what it does, how, for whom, is it
+   safe, what it costs, then a last call to action. */
+:root {
+  --navy: #14213d; --navy-2: #1c2c52; --navy-3: #2a3c68;
+  --orange: #ff5a36; --orange-text: #c2410c;
+  --ink: #141a2b; --ink-2: #485166; --muted: #6f788c; --line: #e3e6ee;
+  --bg: #ffffff; --bg-2: #f5f6fa; --soft: #eef1f9; --on-navy: #c7cfe4;
+  --green: #0f8a63; --green-soft: #e3f6ee;
+  --display: "Manrope", "Inter", system-ui, sans-serif;
+  --text: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --gutter: max(20px, env(safe-area-inset-left, 0px));
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--text); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+img, svg { max-width: 100%; }
+h1, h2, h3 { font-family: var(--display); letter-spacing: -.025em; line-height: 1.12; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.wrap { max-width: 1160px; margin: 0 auto; padding-left: var(--gutter); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 0 20px; border-radius: 10px; font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid transparent; transition: transform .15s ease, background .15s ease; }
+.btn:hover { transform: translateY(-1px); }
+.btn:focus-visible, a:focus-visible, button:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.btn-primary { background: var(--orange); color: #fff; }
+.btn-primary:hover { background: #ef4d2a; }
+.btn-ghost { border-color: rgba(255,255,255,.28); color: #fff; }
+.btn-ghost:hover { background: rgba(255,255,255,.08); }
+.btn-dark { background: var(--navy); color: #fff; }
+.btn-line { border-color: var(--line); color: var(--ink); background: #fff; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--orange-text); }
+
+/* Header */
+header.top { position: sticky; top: 0; z-index: 30; background: rgba(20,33,61,.96); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(255,255,255,.08); }
+.nav { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 68px; }
+.logo { display: inline-flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-family: var(--display); font-weight: 800; font-size: 21px; letter-spacing: -.02em; }
+.logo img { width: 32px; height: 32px; }
+.nav ul { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; }
+.nav ul a { color: var(--on-navy); text-decoration: none; font-size: 15px; font-weight: 500; }
+.nav ul a:hover { color: #fff; }
+.nav-actions { display: flex; align-items: center; gap: 12px; }
+.lang { color: var(--on-navy); font-size: 14px; text-decoration: none; font-weight: 600; }
+.nav-actions .btn { min-height: 40px; padding: 0 16px; font-size: 14px; }
+@media (max-width: 900px) { .nav ul { display: none; } }
+@media (max-width: 520px) { .nav-actions .login { display: none; } }
+
+/* Hero */
+.hero { background: var(--navy); color: #fff; padding-block: 72px 0; overflow: hidden; }
+.hero-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 48px; }
+.hero h1 { font-size: clamp(36px, 5.6vw, 64px); font-weight: 800; max-width: 19ch; }
+.hero h1 em { font-style: normal; color: var(--orange); }
+.hero .lead { margin-top: 20px; max-width: 58ch; font-size: clamp(17px, 2vw, 20px); color: var(--on-navy); }
+.hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.hero-note { margin-top: 14px; font-size: 14px; color: #93a0c0; }
+.channels { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 36px; }
+.channels span { font-size: 13px; font-weight: 500; color: #dfe5f3; border: 1px solid rgba(255,255,255,.16); border-radius: 999px; padding: 6px 12px; }
+
+/* Product mock */
+.mock { margin-top: 8px; border-radius: 16px 16px 0 0; border: 1px solid rgba(255,255,255,.14); border-bottom: 0; background: #f6f7fb; color: var(--ink); display: grid; grid-template-columns: 210px minmax(0, 1fr); font-size: 13px; box-shadow: 0 -20px 60px rgba(0,0,0,.25); }
+.mock-side { background: #fff; border-right: 1px solid var(--line); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; border-radius: 16px 0 0 0; }
+.mock-brand { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 800; font-size: 16px; margin-bottom: 12px; }
+.mock-brand img { width: 26px; height: 26px; }
+.mock-nav { padding: 8px 10px; border-radius: 8px; color: var(--ink-2); display: flex; justify-content: space-between; }
+.mock-nav.on { background: var(--soft); color: var(--navy); font-weight: 600; }
+.mock-nav b { background: var(--orange); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 11px; font-weight: 600; }
+.mock-main { padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.mock-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mock-head strong { font-family: var(--display); font-size: 18px; }
+.mock-head span { color: var(--muted); font-size: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kpi { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.kpi span { display: block; color: var(--muted); font-size: 12px; }
+.kpi strong { display: block; font-family: var(--display); font-size: 22px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.kpi em { font-style: normal; font-size: 12px; color: var(--green); }
+.mock-cols { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 10px; }
+.box { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+.box h4 { margin: 0 0 6px; font-size: 13px; }
+.row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid #eef0f5; }
+.av { width: 28px; height: 28px; border-radius: 50%; background: var(--soft); color: var(--navy); display: grid; place-items: center; font-weight: 600; font-size: 11px; }
+.row p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+.row p b { color: var(--ink); font-weight: 600; }
+.pill { font-size: 11px; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.p-ai { background: #e8eeff; color: #2944a8; } .p-sla { background: #fdf0da; color: #8a5a00; } .p-hot { background: #fde8e4; color: #b23a1d; }
+.bubble { padding: 8px 10px; border-radius: 10px; margin-top: 8px; max-width: 92%; }
+.bubble.in { background: #f1f3f8; }
+.bubble.out { background: var(--navy); color: #fff; margin-left: auto; }
+.bubble small { display: block; opacity: .7; font-size: 11px; margin-top: 2px; }
+@media (max-width: 960px) { .mock { grid-template-columns: 1fr; } .mock-side { display: none; } .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .mock-cols { grid-template-columns: 1fr; } .mock-main { border-radius: 16px 16px 0 0; } }
+
+/* Sections */
+section.block { padding-block: 96px; }
+section.alt { background: var(--bg-2); }
+.section-head { max-width: 720px; margin-bottom: 48px; display: flex; flex-direction: column; gap: 14px; }
+.section-head h2 { font-size: clamp(28px, 3.8vw, 42px); font-weight: 800; }
+.section-head p { color: var(--ink-2); font-size: 18px; }
+
+.proof { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border-block: 1px solid var(--line); }
+.proof div { padding: 28px 24px; border-right: 1px solid var(--line); }
+.proof div:last-child { border-right: 0; }
+.proof strong { display: block; font-family: var(--display); font-size: 30px; font-weight: 800; color: var(--navy); }
+.proof span { color: var(--ink-2); font-size: 15px; }
+@media (max-width: 800px) { .proof { grid-template-columns: repeat(2, minmax(0, 1fr)); } .proof div:nth-child(2) { border-right: 0; } .proof div:nth-child(-n+2) { border-bottom: 1px solid var(--line); } }
+
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; counter-reset: step; list-style: none; padding: 0; margin: 0; }
+.steps li { position: relative; padding-top: 56px; }
+.steps li::before { counter-increment: step; content: counter(step); position: absolute; top: 0; left: 0; width: 40px; height: 40px; border-radius: 12px; background: var(--navy); color: #fff; display: grid; place-items: center; font-family: var(--display); font-weight: 800; }
+.steps h3 { font-size: 20px; margin-bottom: 8px; }
+.steps p { color: var(--ink-2); }
+@media (max-width: 800px) { .steps { grid-template-columns: 1fr; } }
+
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.feature { background: #fff; padding: 28px; display: flex; flex-direction: column; gap: 10px; }
+.feature .ico { width: 40px; height: 40px; border-radius: 10px; background: var(--soft); color: var(--navy); display: grid; place-items: center; }
+.feature .ico svg { width: 20px; height: 20px; }
+.feature h3 { font-size: 18px; }
+.feature p { color: var(--ink-2); font-size: 15px; }
+@media (max-width: 900px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .features { grid-template-columns: 1fr; } }
+
+.audience { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.aud { border: 1px solid var(--line); border-radius: 16px; padding: 28px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
+.aud h3 { font-size: 20px; }
+.aud p { color: var(--ink-2); }
+.aud ul { margin: 6px 0 0; padding-left: 18px; color: var(--ink-2); font-size: 15px; }
+@media (max-width: 900px) { .audience { grid-template-columns: 1fr; } }
+
+.security { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 56px; align-items: start; }
+.security .section-head { margin-bottom: 0; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; }
+.checks li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; }
+.checks li::before { content: ""; width: 22px; height: 22px; border-radius: 50%; background: var(--green-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f8a63' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 12l4 4 8-8'/%3E%3C/svg%3E") center / 14px no-repeat; margin-top: 2px; }
+.checks b { display: block; }
+.checks span { color: var(--ink-2); font-size: 15px; }
+@media (max-width: 900px) { .security { grid-template-columns: 1fr; gap: 36px; } }
+@media (max-width: 600px) { .checks { grid-template-columns: 1fr; } }
+
+/* Pricing */
+.billing { display: inline-flex; padding: 4px; border-radius: 999px; background: #fff; border: 1px solid var(--line); gap: 4px; }
+.billing button { border: 0; background: transparent; font: inherit; font-size: 14px; font-weight: 600; padding: 8px 16px; border-radius: 999px; color: var(--ink-2); cursor: pointer; }
+.billing button[aria-pressed="true"] { background: var(--navy); color: #fff; }
+.billing small { color: var(--green); font-weight: 600; }
+.plans { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 32px; }
+.plan { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 26px; display: flex; flex-direction: column; gap: 16px; position: relative; }
+.plan.featured { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy), 0 20px 40px rgba(20,33,61,.12); }
+.plan .tag { position: absolute; top: -12px; left: 24px; background: var(--orange); color: #fff; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.plan h3 { font-size: 20px; }
+.plan .for { color: var(--muted); font-size: 14px; margin-top: 4px; }
+.price { display: flex; align-items: baseline; gap: 6px; }
+.price strong { font-family: var(--display); font-size: 38px; font-weight: 800; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.price span { color: var(--muted); font-size: 14px; }
+.plan .sub { color: var(--muted); font-size: 13px; min-height: 20px; }
+.plan ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; font-size: 14px; color: var(--ink-2); flex: 1; }
+.plan li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 10px; }
+.plan li::before { content: ""; width: 16px; height: 16px; margin-top: 3px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2314213d' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center / 14px no-repeat; }
+.plan .btn { width: 100%; }
+.pricing-note { margin-top: 20px; color: var(--muted); font-size: 14px; }
+@media (max-width: 1060px) { .plans { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .plans { grid-template-columns: 1fr; } }
+
+/* FAQ */
+.faq { max-width: 820px; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.faq details { border-bottom: 1px solid var(--line); padding: 20px 0; }
+.faq summary { cursor: pointer; font-weight: 600; font-size: 17px; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font-family: var(--display); font-size: 22px; line-height: 1; color: var(--muted); }
+.faq details[open] summary::after { content: "–"; }
+.faq details p { margin-top: 10px; color: var(--ink-2); max-width: 68ch; }
+
+/* Final CTA + footer */
+.cta { background: var(--navy); color: #fff; border-radius: 20px; padding: 56px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: center; }
+.cta h2 { font-size: clamp(26px, 3.4vw, 38px); font-weight: 800; }
+.cta p { color: var(--on-navy); margin-top: 10px; }
+.cta .hero-ctas { margin-top: 0; }
+@media (max-width: 800px) { .cta { grid-template-columns: 1fr; padding: 36px 24px; } }
+footer { padding-block: 48px; color: var(--muted); font-size: 14px; }
+.foot { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; align-items: center; }
+.foot .logo { color: var(--navy); font-size: 18px; }
+.foot .logo img { width: 26px; height: 26px; }
+.foot nav { display: flex; gap: 20px; flex-wrap: wrap; }
+.foot a { text-decoration: none; }
+.foot a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap nav">
+    <a class="logo" href="./"><img src="./agentaria-mark.svg" alt="" width="32" height="32">Agentaria</a>
+    <ul>
+      <li><a href="#product">Producto</a></li>
+      <li><a href="#how-it-works">Cómo funciona</a></li>
+      <li><a href="#security">Seguridad</a></li>
+      <li><a href="#pricing">Precios</a></li>
+      <li><a href="#faq">Preguntas</a></li>
+    </ul>
+    <div class="nav-actions">
+      <a class="lang" href="./en/" hreflang="en">EN</a>
+      <a class="lang login" href="https://app.agentaria.com/login">Iniciar sesión</a>
+      <a class="btn btn-primary" href="mailto:hello@agentaria.com?subject=Agentaria%20demo">Agendar demo</a>
+    </div>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="eyebrow" style="color:#ff8a6b">Agentes de IA para agencias</p>
+      <h1 style="margin-top:14px">Tus clientes reciben respuesta en segundos, a cualquier hora.</h1>
+      <p class="lead">Agentaria es la plataforma para que tu agencia cree agentes de IA que atienden, venden y agendan por los clientes que manejas. Cada cliente tiene su propio agente, su conocimiento y un portal con su marca.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="https://app.agentaria.com/login">Probar 14 días gratis</a>
+        <a class="btn btn-ghost" href="mailto:hello@agentaria.com?subject=Agentaria%20demo">Agendar demo</a>
+      </div>
+      <p class="hero-note">Sin tarjeta para la prueba. Configuración guiada en español.</p>
+      <div class="channels" aria-label="Canales disponibles"><span>WhatsApp</span><span>Instagram</span><span>Messenger</span><span>Chat web</span><span>Llamadas de voz</span></div>
+    </div>
+    <div class="mock" role="img" aria-label="Vista del panel de Agentaria con datos de ejemplo">
+      <div class="mock-side">
+        <div class="mock-brand"><img src="./agentaria-mark.svg" alt="" width="26" height="26">Agentaria</div>
+        <div class="mock-nav on">Inicio</div>
+        <div class="mock-nav">Bandeja <b>12</b></div>
+        <div class="mock-nav">Clientes</div>
+        <div class="mock-nav">Agentes</div>
+        <div class="mock-nav">Reportes</div>
+      </div>
+      <div class="mock-main">
+        <div class="mock-head"><strong>Resumen de este mes</strong><span>Datos de ejemplo</span></div>
+        <div class="kpis">
+          <div class="kpi"><span>Resuelto por IA</span><strong>82 %</strong><em>+6 pts vs. mes anterior</em></div>
+          <div class="kpi"><span>Primera respuesta</span><strong>4 s</strong><em>antes 3 h</em></div>
+          <div class="kpi"><span>Leads capturados</span><strong>146</strong><em>+23 esta semana</em></div>
+          <div class="kpi"><span>Horas ahorradas</span><strong>63 h</strong><em>este mes</em></div>
+        </div>
+        <div class="mock-cols">
+          <div class="box"><h4>Necesitan atención</h4>
+            <div class="row"><div class="av">MR</div><p><b>María R.</b> · Clínica Sonríe · pide hablar con alguien</p><span class="pill p-hot">Escalado</span></div>
+            <div class="row"><div class="av">JC</div><p><b>Juan C.</b> · Inmobiliaria Norte · pregunta por crédito</p><span class="pill p-sla">SLA 8 min</span></div>
+            <div class="row"><div class="av">LP</div><p><b>Laura P.</b> · Tienda Verde · estado del pedido</p><span class="pill p-ai">IA respondiendo</span></div>
+          </div>
+          <div class="box"><h4>Conversación en vivo</h4>
+            <div class="bubble in">Hola, ¿tienen cita el sábado para limpieza dental?<small>WhatsApp · 10:42</small></div>
+            <div class="bubble out">¡Hola! Sí, tengo 10:00 y 11:30. ¿Cuál te reservo?<small>Agente IA · 4 s</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="product" style="padding-block:56px 96px">
+  <div class="wrap">
+    <div class="proof">
+      <div><strong>24/7</strong><span>Atención sin horarios ni fines de semana</span></div>
+      <div><strong>5</strong><span>Canales en un solo panel</span></div>
+      <div><strong>11</strong><span>Proveedores de IA para elegir</span></div>
+      <div><strong>1 portal</strong><span>Por cliente, con su logo y colores</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block alt" id="how-it-works">
+  <div class="wrap">
+    <div class="section-head"><p class="eyebrow">Cómo funciona</p><h2>De cero a tu primer agente en una tarde</h2><p>No necesitas programar. Si sabes cómo atiende tu cliente, ya tienes lo necesario.</p></div>
+    <ol class="steps">
+      <li><h3>Crea el cliente y su agente</h3><p>Elige la industria, el tono y el modelo de IA. Partes de una plantilla y la ajustas en minutos.</p></li>
+      <li><h3>Enséñale el negocio</h3><p>Sube PDFs, preguntas frecuentes y precios. El agente responde con esa información y no inventa.</p></li>
+      <li><h3>Conecta canales y entrega el portal</h3><p>WhatsApp, Instagram, Messenger, web o teléfono. Tu cliente entra a su portal y ve todo con su marca.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="block">
+  <div class="wrap">
+    <div class="section-head"><p class="eyebrow">Producto</p><h2>Todo lo que una agencia necesita para vender atención con IA</h2><p>Un solo panel para operar a todos tus clientes, y un portal para cada uno de ellos.</p></div>
+    <div class="features">
+      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/></svg></div><h3>Bandeja con IA y humanos</h3><p>La IA responde y una persona entra cuando hace falta. Pausa el agente, contesta y devuélvele el control.</p></div>
+      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.6c1.8.7 3 2.6 3.5 5.4"/></svg></div><h3>Portal con la marca del cliente</h3><p>Cada cliente ve sus conversaciones, contactos y reportes en su propio dominio, con su logo y colores.</p></div>
+      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h11l5 5v11H4z"/><path d="M8 12h8M8 16h6"/></svg></div><h3>Conocimiento por cliente</h3><p>PDFs, preguntas y respuestas y catálogos. Búsqueda semántica para que el agente encuentre la respuesta correcta.</p></div>
+      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg></div><h3>Agenda, seguimientos y datos</h3><p>El agente pide nombre, correo y teléfono, hace seguimiento si el contacto deja de responder y respeta horarios de atención.</p></div>
+      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg></div><h3>Agentes de voz</h3><p>Un agente que contesta el teléfono del cliente, con voz natural y traspaso a una persona.</p></div>
+      <div class="feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l4-4 3 3 5-6"/></svg></div><h3>Reportes que justifican la renovación</h3><p>Conversaciones resueltas por IA, tiempos de respuesta y costo por cliente, listos para mostrar.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block alt">
+  <div class="wrap">
+    <div class="section-head"><p class="eyebrow">Para quién</p><h2>Hecho para quienes atienden a otros negocios</h2></div>
+    <div class="audience">
+      <div class="aud"><h3>Agencias de marketing</h3><p>Suma un servicio mensual de atención con IA a tus clientes actuales y cobra por cada uno.</p></div>
+      <div class="aud"><h3>Consultoras y freelancers</h3><p>Implementa agentes para clínicas, inmobiliarias, tiendas y escuelas sin construir tu propia plataforma.</p></div>
+      <div class="aud"><h3>Empresas con varias marcas</h3><p>Opera cada marca o sucursal por separado, con sus datos aislados, desde un solo equipo.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="security">
+  <div class="wrap security">
+    <div class="section-head"><p class="eyebrow">Seguridad</p><h2>Los datos de cada cliente, separados y protegidos</h2><p>Agentaria está pensado para agencias que manejan información de terceros.</p></div>
+    <ul class="checks">
+      <li><div><b>Datos aislados por cliente</b><span>Cada cliente tiene su espacio: agentes, conocimiento y conversaciones no se mezclan.</span></div></li>
+      <li><div><b>Claves cifradas</b><span>Las claves de IA y las sesiones de WhatsApp se guardan cifradas y nunca llegan al navegador.</span></div></li>
+      <li><div><b>Roles y verificación en dos pasos</b><span>Owner, admin, operador y lector. Puedes exigir 2FA a todo tu equipo.</span></div></li>
+      <li><div><b>WhatsApp oficial</b><span>Conexión con la API oficial de Meta para los números de tus clientes.</span></div></li>
+      <li><div><b>Copias de seguridad diarias</b><span>Respaldo automático de la base de datos todos los días.</span></div></li>
+      <li><div><b>Instancia dedicada</b><span>En Enterprise, tu propia instalación aislada, con la región de datos que necesites.</span></div></li>
+    </ul>
+  </div>
+</section>
+
+<section class="block alt" id="pricing">
+  <div class="wrap">
+    <div class="section-head"><p class="eyebrow">Precios</p><h2>Precios claros, sin sorpresas</h2><p>Paga por los clientes que atiendes. Todos los planes incluyen todos los canales y el portal con marca.</p></div>
+    <div class="billing" role="group" aria-label="Periodo de facturación">
+      <button type="button" id="bill-monthly" aria-pressed="true">Mensual</button>
+      <button type="button" id="bill-yearly" aria-pressed="false">Anual <small>2 meses gratis</small></button>
+    </div>
+    <div class="plans">
+      <div class="plan"><div><h3>Starter</h3><p class="for">Para empezar</p></div><div class="price"><strong data-m="49" data-y="41">$49</strong><span>/mes</span></div><p class="sub" data-sub>Facturado mensualmente</p><ul><li>5 clientes</li><li>Todos los canales</li><li>Portal con la marca de cada cliente</li><li>Roles de equipo y 2FA</li></ul><a class="btn btn-line" href="https://app.agentaria.com/login">Probar 14 días gratis</a></div>
+      <div class="plan featured"><span class="tag">Más elegido</span><div><h3>Growth</h3><p class="for">Para agencias en crecimiento</p></div><div class="price"><strong data-m="149" data-y="124">$149</strong><span>/mes</span></div><p class="sub" data-sub>Facturado mensualmente</p><ul><li>20 clientes</li><li>Todo lo de Starter</li><li>Agentes de voz y sandbox de pruebas</li><li>Soporte prioritario en español</li></ul><a class="btn btn-dark" href="https://app.agentaria.com/login">Probar 14 días gratis</a></div>
+      <div class="plan"><div><h3>Agency</h3><p class="for">Sin límite de clientes</p></div><div class="price"><strong data-m="299" data-y="249">$299</strong><span>/mes</span></div><p class="sub" data-sub>Facturado mensualmente</p><ul><li>Clientes ilimitados</li><li>Todo lo de Growth</li><li>Panel con el dominio de tu agencia</li><li>Onboarding y gestor de cuenta dedicados</li></ul><a class="btn btn-line" href="https://app.agentaria.com/login">Probar 14 días gratis</a></div>
+      <div class="plan"><div><h3>Enterprise</h3><p class="for">Para empresas y agencias grandes</p></div><div class="price"><span>desde</span><strong>$990</strong><span>/mes</span></div><p class="sub">Contrato anual</p><ul><li>Instancia dedicada</li><li>SLA y acuerdo de tratamiento de datos</li><li>Registro de auditoría</li><li>Factura local y soporte con prioridad</li></ul><a class="btn btn-line" href="mailto:hello@agentaria.com?subject=Agentaria%20demo">Hablar con ventas</a></div>
+    </div>
+    <p class="pricing-note">Precios en USD. El uso de los modelos de IA y de WhatsApp se cobra aparte, a precio del proveedor, con tus propias claves o con saldo.</p>
+  </div>
+</section>
+
+<section class="block" id="faq">
+  <div class="wrap">
+    <div class="section-head"><p class="eyebrow">Preguntas frecuentes</p><h2>Lo que nos suelen preguntar</h2></div>
+    <div class="faq">
+      <details><summary>¿Necesito saber programar?</summary><p>No. Creas agentes con un asistente, les subes documentos y conectas canales desde el panel.</p></details>
+      <details><summary>¿Cómo se cobra la IA?</summary><p>Puedes usar tus propias claves de proveedores como OpenAI, Anthropic, Google u OpenRouter, o cargar saldo. Ves el costo por cliente en los reportes para cobrarlo a tu vez.</p></details>
+      <details><summary>¿Funciona con WhatsApp oficial?</summary><p>Sí. Recomendamos la API oficial de Meta (Cloud API) para cada número. También puedes vincular un número por QR para pruebas.</p></details>
+      <details><summary>¿Mis clientes ven Agentaria?</summary><p>No tienen por qué. Su portal muestra su logo, sus colores y puede usar su propio dominio.</p></details>
+      <details><summary>¿Qué pasa si la IA no sabe responder?</summary><p>Escala la conversación a una persona del equipo según las reglas que definas, y avisa por notificación.</p></details>
+      <details><summary>¿Qué pasa al terminar la prueba?</summary><p>Eliges un plan para seguir. Si no, tu cuenta queda pausada y tus datos se conservan 30 días.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="block" style="padding-top:0">
+  <div class="wrap">
+    <div class="cta">
+      <div><h2>Empieza a vender atención con IA este mes</h2><p>Te ayudamos a configurar tu primer cliente en una llamada.</p></div>
+      <div class="hero-ctas"><a class="btn btn-primary" href="https://app.agentaria.com/login">Probar 14 días gratis</a><a class="btn btn-ghost" href="mailto:hello@agentaria.com?subject=Agentaria%20demo">Agendar demo</a></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <a class="logo" href="./"><img src="./agentaria-mark.svg" alt="" width="26" height="26">Agentaria</a>
+    <nav><a href="#pricing">Precios</a><a href="#security">Seguridad</a><a href="#">Privacidad</a><a href="#">Términos</a></nav>
+    <span>© 2026 Agentaria</span>
+  </div>
+</footer>
+
+<script>
+// Monthly / yearly price toggle. Yearly prices are per month, billed once a year.
+(function () {
+  var monthly = document.getElementById("bill-monthly");
+  var yearly = document.getElementById("bill-yearly");
+  function show(isYearly) {
+    monthly.setAttribute("aria-pressed", String(!isYearly));
+    yearly.setAttribute("aria-pressed", String(isYearly));
+    document.querySelectorAll(".price strong[data-m]").forEach(function (el) {
+      el.textContent = "$" + (isYearly ? el.dataset.y : el.dataset.m);
+    });
+    document.querySelectorAll("[data-sub]").forEach(function (el) {
+      el.textContent = isYearly ? "Facturado anualmente" : "Facturado mensualmente";
+    });
+  }
+  monthly.addEventListener("click", function () { show(false); });
+  yearly.addEventListener("click", function () { show(true); });
+})();
+</script>
+</body>
+</html>
