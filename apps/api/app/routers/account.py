@@ -66,7 +66,7 @@ def two_factor_setup(db: Session = Depends(get_db), user: User = Depends(get_cur
     user.totp_secret = encrypt_secret(secret)
     user.totp_last_step = 0
     db.commit()
-    uri = totp.otpauth_uri(secret, user.email, user.agency.name if user.agency else "OpenNexus")
+    uri = totp.otpauth_uri(secret, user.email, user.agency.name if user.agency else "Agentaria")
     return TwoFactorSetup(secret=secret, otpauth_uri=uri, qr_svg=totp.qr_svg_data_uri(uri))
 
 

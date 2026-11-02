@@ -30,6 +30,12 @@ An owner can **require two-step verification** for the whole team under
 **Settings → Team → Security policy**. Members who have not set it up are sent
 to Security and can use nothing else until they do.
 
+## Activity log
+
+**Settings → Activity** lists every change made in the dashboard and every sign-in, newest first: when it happened, who did it, what changed and the IP address it came from. Failed sign-ins for a real account show in red. Owners and admins read it; operators and viewers do not.
+
+Every successful write to the dashboard API is recorded on its own, so new features are covered without extra work. Routine inbox work (sending a reply, reacting, marking a conversation read) and checks that only test a key are left out. The log is read from `GET /api/audit` (`limit`, `offset`, `action` prefix and `actor` email filters).
+
 ## First-run setup
 
 Set `SETUP_TOKEN` on a public deployment: the first-run form then asks for it,

@@ -2,7 +2,7 @@
 
 > Leer en español: [contributing.md](../es/contributing.md)
 
-Docker is the fastest way to run OpenNexus, but for day-to-day development you usually want each service running on the host with hot reload. This guide covers running the backend, frontend and WhatsApp bridge locally, the test suites, migrations and the project conventions.
+Docker is the fastest way to run Agentaria, but for day-to-day development you usually want each service running on the host with hot reload. This guide covers running the backend, frontend and WhatsApp bridge locally, the test suites, migrations and the project conventions.
 
 ## Installation scope
 
@@ -102,7 +102,7 @@ All code, identifiers, comments, commit messages and docs are written in **Engli
 
 ## Extension points
 
-A deployment that runs OpenNexus for others may need to add to it without
+A deployment that runs Agentaria for others may need to add to it without
 forking. These are the places that are meant for that, kept stable on purpose;
 changing their shape is a breaking change and gets a line in the changelog:
 

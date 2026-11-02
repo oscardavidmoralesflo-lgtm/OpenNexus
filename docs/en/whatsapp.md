@@ -2,7 +2,7 @@
 
 > Leer en español: [whatsapp.md](../es/whatsapp.md)
 
-OpenNexus connects a real WhatsApp number to each client so their agent answers conversations automatically. Each client gets its own session, linked by scanning a QR code from the WhatsApp mobile app — no WhatsApp Business API account required.
+Agentaria connects a real WhatsApp number to each client so their agent answers conversations automatically. Each client gets its own session, linked by scanning a QR code from the WhatsApp mobile app — no WhatsApp Business API account required.
 
 ## The bridge service
 

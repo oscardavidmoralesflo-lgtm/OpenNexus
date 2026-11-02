@@ -2,7 +2,7 @@
 
 > Leer en español: [configuration.md](../es/configuration.md)
 
-OpenNexus is configured through environment variables. In Docker, they all live in a single `.env.docker` file at the repository root; a helper script generates it with strong random secrets so you never have to invent them yourself.
+Agentaria is configured through environment variables. In Docker, they all live in a single `.env.docker` file at the repository root; a helper script generates it with strong random secrets so you never have to invent them yourself.
 
 ## The .env.docker file
 

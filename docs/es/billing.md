@@ -1,6 +1,6 @@
 # Facturación: planes y crédito de IA
 
-Para quien opera OpenNexus para una agencia y le cobra por ello. Desactivada
+Para quien opera Agentaria para una agencia y le cobra por ello. Desactivada
 por defecto (`BILLING_ENABLED=false`): una instalación propia que trae su propia
 clave de IA no necesita nada de esto, y para ella nada cambia.
 

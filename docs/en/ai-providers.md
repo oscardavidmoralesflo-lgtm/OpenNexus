@@ -2,7 +2,7 @@
 
 > Leer en español: [ai-providers.md](../es/ai-providers.md)
 
-Each agency can connect **OpenRouter, OpenAI, Anthropic (Claude), Google Gemini, DeepSeek, Groq, xAI (Grok), Mistral AI, Together AI, Fireworks AI, and Cerebras**. OpenNexus encrypts each key, and each agent chooses its provider independently. Direct providers use their own accounts, balances and native model IDs; OpenRouter remains available as a multi-vendor router.
+Each agency can connect **OpenRouter, OpenAI, Anthropic (Claude), Google Gemini, DeepSeek, Groq, xAI (Grok), Mistral AI, Together AI, Fireworks AI, and Cerebras**. Agentaria encrypts each key, and each agent chooses its provider independently. Direct providers use their own accounts, balances and native model IDs; OpenRouter remains available as a multi-vendor router.
 
 ## Bring your own key
 

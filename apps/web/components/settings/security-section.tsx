@@ -46,7 +46,7 @@ export function SecuritySection() {
     const blob = new Blob([`${t("settings.security.codesFileTitle")}\n\n${list.join("\n")}\n`], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = "opennexus-recovery-codes.txt"; anchor.click();
+    anchor.href = url; anchor.download = "agentaria-recovery-codes.txt"; anchor.click();
     URL.revokeObjectURL(url);
   }
 

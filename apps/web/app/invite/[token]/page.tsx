@@ -41,7 +41,7 @@ export default function InvitePage() {
 
   return <main className="access-page agency-access">
     <header className="access-topbar">
-      <div className="access-brand"><span className="opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><strong>OpenNexus</strong></div>
+      <div className="access-brand"><span className="brand-icon"><img src="/brand/agentaria-mark.svg" alt="" /></span><strong>Agentaria</strong></div>
     </header>
     <div className="access-layout invite-layout">
       <section className="access-form-wrap">

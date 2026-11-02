@@ -33,7 +33,7 @@ SERVER_VERSION = "0.3.0"
 TOKEN_PREFIX = "onx_"
 MAX_TEXT_KNOWLEDGE = 400_000
 INSTRUCTIONS = (
-    "OpenNexus workspace: an agency's clients and the AI agents that answer their customers. "
+    "Agentaria workspace: an agency's clients and the AI agents that answer their customers. "
     "Start with list_clients and list_agents. Agents belong to a client; create one with create_agent, "
     "refine it with update_agent, give it knowledge with add_knowledge_text or add_qa, and check how it "
     "answers with test_agent (each test reply is billed like any other)."

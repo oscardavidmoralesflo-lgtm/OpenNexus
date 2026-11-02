@@ -15,8 +15,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "OpenNexus — AI agents for your agency",
-  description: "Open source platform to build and manage AI agents.",
+  title: "Agentaria — AI agents for agencies",
+  description: "Build, run and manage AI agents for every client of your agency.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

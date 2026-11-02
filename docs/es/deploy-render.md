@@ -1,4 +1,4 @@
-# Desplegar OpenNexus en Render
+# Desplegar Agentaria en Render
 
 [`render.yaml`](../../render.yaml) es un Blueprint con todo el stack:
 

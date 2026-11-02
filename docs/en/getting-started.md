@@ -2,7 +2,7 @@
 
 > Leer en español: [getting-started.md](../es/getting-started.md)
 
-OpenNexus runs as three services plus PostgreSQL, orchestrated by Docker Compose. The fastest way to try it is to clone the repository, generate secrets and bring the stack up with a single command.
+Agentaria runs as three services plus PostgreSQL, orchestrated by Docker Compose. The fastest way to try it is to clone the repository, generate secrets and bring the stack up with a single command.
 
 ## Requirements
 

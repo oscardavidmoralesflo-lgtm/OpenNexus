@@ -1,12 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Bot, CheckCircle2, Lock, Users, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LoaderCircle, Palette, PauseCircle, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, History, Lock, Users, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LoaderCircle, Palette, PauseCircle, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { Alert, PageHead } from "@/components/ui";
 import { FormSkeleton } from "@/components/skeleton";
 import { SectionTabs, type SectionTab } from "@/components/section-tabs";
 import { WorkspaceDomainSection } from "@/components/settings/workspace-domain";
 import { McpAccessSection } from "@/components/settings/mcp-access";
+import { AuditSection } from "@/components/settings/audit-section";
 import { SecuritySection } from "@/components/settings/security-section";
 import { IntegrationAccessSection } from "@/components/settings/integration-access";
 import { TeamSection } from "@/components/settings/team-section";
@@ -21,8 +22,8 @@ import { useT, type TranslateFn } from "@/lib/i18n";
 import { PROVIDERS } from "@/lib/providers";
 import type { Agency, Provider, ProviderTest } from "@/types";
 
-type SettingsTab = "identity" | "domain" | "team" | "security" | "providers" | "integrations" | "agents";
-const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "providers", "integrations", "agents"];
+type SettingsTab = "identity" | "domain" | "team" | "security" | "audit" | "providers" | "integrations" | "agents";
+const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "audit", "providers", "integrations", "agents"];
 // What an operator or a viewer sees: their own account, and the team.
 const PERSONAL_TABS: SettingsTab[] = ["team", "security"];
 
@@ -45,6 +46,7 @@ export default function SettingsPage() {
     { id: "domain", label: t("settings.tabs.domain"), icon: Globe2 },
     { id: "team", label: t("settings.tabs.team"), icon: Users },
     { id: "security", label: t("settings.tabs.security"), icon: Lock },
+    { id: "audit", label: t("settings.tabs.audit"), icon: History },
     { id: "integrations", label: t("tools.tab"), icon: KeyRound },
     { id: "providers", label: t("settings.tabs.providers"), icon: KeyRound },
     { id: "agents", label: t("settings.tabs.agents"), icon: Bot },
@@ -116,6 +118,7 @@ export default function SettingsPage() {
     {tab === "team" && <TeamSection />}
 
     {tab === "security" && <SecuritySection />}
+    {tab === "audit" && <AuditSection />}
 
     {tab === "providers" && <section className="section-block"><div className="section-heading"><div><h2>{t("settings.providers.heading")}</h2><p>{t("settings.providers.copy")}</p></div></div>
       <div className="security-note"><ShieldCheck size={20} /><span><strong>{t("settings.index.privateCredentials")}</strong> {t("settings.index.privateCredentialsCopy")}</span></div>

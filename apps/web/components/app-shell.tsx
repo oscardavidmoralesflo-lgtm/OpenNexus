@@ -115,7 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   if (isBare) return <>{children}</>;
-  if (loading || !user) return <div className="app-loader"><span className="opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><span>{t("shell.loading")}</span></div>;
+  if (loading || !user) return <div className="app-loader"><span className="brand-icon"><img src="/brand/agentaria-mark.svg" alt="" /></span><span>{t("shell.loading")}</span></div>;
 
   const workspaceLabel = <div className="sidebar-workspace">{user.agency.logo_url ? <img src={user.agency.logo_url} alt="" /> : <Building2 size={14} />}<span>{user.agency.name}</span></div>;
   const WorkspaceLabel = appShellExtensions.WorkspaceLabel;
@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
         <button type="button" className="sidebar-toggle" onClick={toggleCollapsed} aria-label={collapsed ? t("shell.expandMenu") : t("shell.collapseMenu")} title={collapsed ? t("shell.expandMenu") : t("shell.collapseMenu")}>{collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}</button>
         <div className="brand-row">
-          <Link href="/" className="brand"><span className="opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><span>OpenNexus</span></Link>
+          <Link href="/" className="brand"><span className="brand-icon"><img src="/brand/agentaria-mark.svg" alt="" /></span><span>Agentaria</span></Link>
           <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label={t("shell.closeMenu")}><X /></button>
         </div>
         {WorkspaceLabel ? <WorkspaceLabel user={user}>{workspaceLabel}</WorkspaceLabel> : workspaceLabel}
