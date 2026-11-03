@@ -155,3 +155,9 @@ Beyond these settings, the agent's Q&A pairs, uploaded documents, per-client con
 ## Unpublishing and deleting an agent
 
 **Unpublish** (`is_active: false`) pauses the agent: it stops answering and spending tokens, messages keep arriving for a person, and everything is kept. **Delete** (`DELETE /api/agents/{id}`) removes its knowledge, tools, questions and answers, escalation rules and configuration. The conversations it handled are the client's history and stay in the portal under the agent's name. An agent that answers a channel cannot be deleted until another agent is assigned to that channel (`409`).
+
+## Quality lab
+
+The agent's **Quality** tab holds test questions: what a customer asks and, in plain words, what a good answer must do ("give the Sunday hours and offer to book"). **Run all tests** asks the agent each question with its current instructions and knowledge, then a second AI call scores the answer from 0 to 100 against the expectation and the knowledge; 70 or more passes, and an invented fact scores 40 or less. Each test keeps its latest answer, score and reason.
+
+Run the tests after changing the instructions, the knowledge or the model. They never use the agent's tools, so nothing outside Agentaria changes. Each test is two short calls billed to the agent's provider, recorded with purpose `test` and left out of client reports. Up to 50 tests per agent; API under `/api/agents/{id}/tests` (`POST .../run`, optional `case_id`).

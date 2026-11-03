@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Bot, Copy, ExternalLink, FileText, Globe2, ImagePlus, ListChecks, LoaderCircle, MessageCircle, Pencil, QrCode, Radio, Save, Settings2, ShieldAlert, ShieldCheck, Tag, Trash2, UserCheck, UserRound, Users, UserX, Webhook } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, Copy, ExternalLink, FileBarChart, FileText, Globe2, ImagePlus, ListChecks, LoaderCircle, MessageCircle, Pencil, QrCode, Radio, Save, Settings2, ShieldAlert, ShieldCheck, Tag, Trash2, UserCheck, UserRound, Users, UserX, Webhook } from "lucide-react";
 import { NewAgentMenu } from "@/components/new-agent-menu";
 import { Alert, EmptyState, Modal, StatusBadge } from "@/components/ui";
 import { SectionTabs } from "@/components/section-tabs";
@@ -185,7 +185,7 @@ export default function ClientDetailPage() {
   const portalUrl = domain?.verified && domain.domain ? `https://${domain.domain}` : defaultPortalUrl;
   return <div className="page">
     <Link href="/clients" className="back-link"><ArrowLeft size={17} /> {t("clients.detail.back")}</Link>
-    <header className="entity-header"><div className="entity-avatar xl">{client.name.slice(0, 2).toUpperCase()}</div><div><div className="title-line"><h1>{client.name}</h1><StatusBadge active={client.is_active} /></div><p>{businessLabel(catalog, client, lang) || t("clients.detail.industryUndefined")} · {client.agents.length === 1 ? t("clients.detail.agentOne", { count: client.agents.length }) : t("clients.detail.agentMany", { count: client.agents.length })}</p></div><div className="header-actions"><NewAgentMenu clientId={client.id} label={t("clients.detail.newAgent")} /></div></header>
+    <header className="entity-header"><div className="entity-avatar xl">{client.name.slice(0, 2).toUpperCase()}</div><div><div className="title-line"><h1>{client.name}</h1><StatusBadge active={client.is_active} /></div><p>{businessLabel(catalog, client, lang) || t("clients.detail.industryUndefined")} · {client.agents.length === 1 ? t("clients.detail.agentOne", { count: client.agents.length }) : t("clients.detail.agentMany", { count: client.agents.length })}</p></div><div className="header-actions"><Link href={`/clients/${client.id}/report`} className="button secondary"><FileBarChart size={16} /> {t("clients.report.open")}</Link><NewAgentMenu clientId={client.id} label={t("clients.detail.newAgent")} /></div></header>
     <SectionTabs<Tab> className="client-tabs" value={tab} onChange={changeTab} tabs={[
       { id: "details", label: t("clients.detail.tabDetails"), icon: Settings2 },
       { id: "agents", label: t("clients.detail.tabAgents"), icon: Bot, badge: client.agents.length },

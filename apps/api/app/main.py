@@ -13,10 +13,12 @@ from .services.team_roles import enforce as enforce_role_policy
 from .routers import (
     account,
     agency,
+    agent_tests,
     agent_tools,
     agents,
     audit,
     auth,
+    client_report,
     billing,
     catalog,
     clients,
@@ -167,3 +169,5 @@ app.include_router(social.router, prefix="/api")
 app.include_router(social_webhook.public_router, prefix="/api")
 app.include_router(phone.router, prefix="/api")
 app.include_router(phone.public_router, prefix="/api")
+app.include_router(agent_tests.router, prefix="/api")
+app.include_router(client_report.router, prefix="/api")

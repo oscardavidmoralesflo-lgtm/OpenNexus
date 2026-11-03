@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, AudioLines, Bot, CheckCircle2, FileText, ImageIcon, Mic, LoaderCircle, MessageSquareText, Pencil, Plug, Plus, Power, PowerOff, RefreshCw, Save, Settings2, Sparkles, Trash2, UploadCloud, X, XCircle } from "lucide-react";
+import { ArrowLeft, AudioLines, Bot, CheckCircle2, FileText, FlaskConical, ImageIcon, Mic, LoaderCircle, MessageSquareText, Pencil, Plug, Plus, Power, PowerOff, RefreshCw, Save, Settings2, Sparkles, Trash2, UploadCloud, X, XCircle } from "lucide-react";
 import { SectionTabs } from "@/components/section-tabs";
 import { api, apiUrl, messageFrom } from "@/lib/api";
 import { currentSections, showSections } from "@/lib/section-path";
@@ -22,6 +22,7 @@ import { ContactCaptureEditor } from "@/components/contact-capture";
 import { FollowUpEditor } from "@/components/follow-ups";
 import { HumanizationEditor } from "@/components/humanization";
 import { AgentVoiceTab } from "@/components/agent-voice-tab";
+import { AgentQualityTab } from "@/components/agent-quality-tab";
 import { VoiceModelPicker } from "@/components/voice-model-picker";
 import { VoiceTransfer } from "@/components/voice-transfer";
 import { AgentScheduleEditor, onDutyNow } from "@/components/agent-schedule";
@@ -30,8 +31,8 @@ import { PROVIDERS, defaultModelFor, DEFAULT_PROVIDER, DEFAULT_AUDIO_MODEL, DEFA
 import { narrowModels, useAvailableModels } from "@/lib/use-available-models";
 import type { Agent, AgentTool, KnowledgeDocument, MediaAsset, QAPair, EmbeddingModelInfo, ScheduleSlot } from "@/types";
 
-type Tab = "basics" | "voice" | "knowledge" | "tools" | "playground";
-const TABS: Tab[] = ["basics", "voice", "knowledge", "tools", "playground"];
+type Tab = "basics" | "voice" | "knowledge" | "tools" | "quality" | "playground";
+const TABS: Tab[] = ["basics", "voice", "knowledge", "tools", "quality", "playground"];
 
 export default function AgentDetailPage() {
   const { t, lang } = useLanguage();
@@ -276,7 +277,8 @@ export default function AgentDetailPage() {
       ...(agent.kind === "voice" ? [{ id: "voice" as const, label: t("phone.agent.tab"), icon: Mic }] : []),
       { id: "knowledge", label: t("agents.detail.tabKnowledge"), icon: FileText, badge: documents.length },
       { id: "tools", label: t("tools.tab"), icon: Plug, badge: tools.length },
-      // A call cannot be tried by typing: a voice agent has no playground.
+      // Typed tests and the playground need a chat agent; a call cannot be typed.
+      ...(agent.kind === "voice" ? [] : [{ id: "quality" as const, label: t("agents.quality.tab"), icon: FlaskConical }]),
       ...(agent.kind === "voice" ? [] : [{ id: "playground" as const, label: t("agents.detail.tabPlayground"), icon: MessageSquareText }]),
     ]} />
 
@@ -377,6 +379,7 @@ export default function AgentDetailPage() {
     {tab === "tools" && ManagedSection && <ManagedSection agentId={id} onToolsChange={() => api<AgentTool[]>(`/agents/${id}/tools`).then(setTools).catch(() => {})} />}
 
     {tab === "voice" && agent.kind === "voice" && <AgentVoiceTab agent={agent} onSaved={setAgent} />}
+    {tab === "quality" && agent.kind !== "voice" && <AgentQualityTab agentId={agent.id} />}
     {tab === "playground" && agent.kind !== "voice" && <ChatPlayground lockedAgentId={agent.id} />}
   </div>;
 }

@@ -23,6 +23,8 @@ Docker stack; run `alembic upgrade head` on local setups).
 
 ### Added
 
+- **Quality lab** in each chat agent's new **Quality** tab: test questions with what a good answer must do, run on demand and scored 0–100 by a second AI call against the expectation and the agent's knowledge (70 passes). Tests never use the agent's tools. Routes under `/api/agents/{id}/tests`; migration `0069` adds `agent_test_cases`.
+- **Monthly client report**: a printable one-page report per client and month (Print or save PDF), with the AI-resolved share, first reply, new contacts, handoffs, daily and per-channel conversations, an estimate of time saved and an optional AI cost row, compared with the month before. `GET /api/clients/{id}/monthly-report`.
 - **Search and go** (Ctrl K, ⌘K on a Mac, or **Search** in the sidebar): jump to any page, settings section, client or agent, or start a new client or agent, from anywhere in the dashboard.
 - **Value numbers on Home** for the chosen period: share of conversations resolved by AI with no person, median time to the first reply, AI replies sent and AI cost. `GET /api/dashboard/metrics` gains `conversations`, `ai_resolved`, `ai_resolved_pct`, `first_reply_median_s`, `ai_replies` and `ai_cost_usd`.
 - **Change your password** under Settings → Security (`POST /api/account/password`), and `python -m app.account_admin` (`users`, `reset-password <email> [--disable-2fa]`) to get back into an installation whose password was lost.

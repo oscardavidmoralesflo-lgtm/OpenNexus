@@ -144,3 +144,9 @@ Más allá de estos ajustes, los pares de preguntas y respuestas del agente, los
 ## Despublicar y eliminar un agente
 
 **Despublicar** (`is_active: false`) pausa el agente: deja de responder y de gastar tokens, los mensajes siguen llegando para una persona, y todo se conserva. **Eliminar** (`DELETE /api/agents/{id}`) borra su conocimiento, herramientas, preguntas y respuestas, reglas de escalamiento y configuración. Las conversaciones que atendió son el historial del cliente y se quedan en el portal con el nombre del agente. Un agente que atiende un canal no se puede eliminar hasta asignar otro agente a ese canal (`409`).
+
+## Laboratorio de calidad
+
+La pestaña **Calidad** del agente guarda preguntas de prueba: lo que pregunta un cliente y, en palabras simples, lo que debe hacer una buena respuesta ("dar el horario del domingo y ofrecer reservar"). **Ejecutar todas** le hace cada pregunta al agente con sus instrucciones y conocimiento actuales, y una segunda llamada a la IA puntúa la respuesta de 0 a 100 contra lo esperado y el conocimiento; con 70 o más aprueba, y un dato inventado saca 40 o menos. Cada prueba guarda su última respuesta, puntaje y motivo.
+
+Ejecuta las pruebas después de cambiar las instrucciones, el conocimiento o el modelo. Nunca usan las herramientas del agente, así que nada cambia fuera de Agentaria. Cada prueba son dos llamadas cortas cobradas al proveedor del agente, registradas con propósito `test` y excluidas de los reportes de clientes. Hasta 50 pruebas por agente; API en `/api/agents/{id}/tests` (`POST .../run`, `case_id` opcional).
