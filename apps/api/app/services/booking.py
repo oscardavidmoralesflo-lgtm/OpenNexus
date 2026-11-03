@@ -29,6 +29,7 @@ from .tools.specs import ToolSpec
 logger = logging.getLogger(__name__)
 
 STATUSES = ("confirmed", "cancelled", "completed", "no_show")
+TOOL_NAMES = ("check_availability", "book_appointment", "cancel_appointment")
 # Channels a reminder can reach: the contact must be able to read it later.
 REMINDER_CHANNELS = ("whatsapp", "whatsapp_cloud", "instagram", "messenger")
 MAX_SLOTS_LISTED = 40
@@ -239,7 +240,7 @@ def _contact_scope(conversation: Conversation):
 
 
 def upcoming_for(db: Session, conversation: Conversation, now: datetime | None = None) -> list[Appointment]:
-    if conversation.id is None:
+    if getattr(conversation, "id", None) is None:
         return []
     return list(db.scalars(
         select(Appointment).where(
@@ -312,7 +313,7 @@ def build_booking_specs(
         start = _parse_local(args.get("start", ""), client)
         if start is None:
             return "start must look like 2026-11-04 10:30, in business time", True
-        name = str(args.get("name") or "").strip() or (conversation.contact_name or "").strip()
+        name = str(args.get("name") or "").strip() or (getattr(conversation, "contact_name", None) or "").strip()
         if not name:
             return "Ask for the person's name first, then book.", True
         reason = _bookable(settings, client, start, now_utc())
@@ -413,8 +414,17 @@ def _reminder_conversation(db: Session, appointment: Appointment) -> Conversatio
     """Where the reminder goes: the contact's latest conversation on the same
     line, so a reply lands in the current case, else the booking's own."""
     origin = appointment.conversation
-    if origin is None or origin.channel not in REMINDER_CHANNELS:
+    if origin is None:
         return None
+    if origin.channel not in REMINDER_CHANNELS:
+        # Booked on a call: remind on the contact's latest chat, when they have one.
+        if not appointment.contact_id:
+            return None
+        return db.scalar(
+            select(Conversation).where(
+                Conversation.contact_id == appointment.contact_id, Conversation.channel.in_(REMINDER_CHANNELS),
+            ).order_by(Conversation.created_at.desc()).limit(1)
+        )
     if not appointment.contact_id:
         return origin
     latest = db.scalar(

@@ -24,7 +24,7 @@ El agente recibe tres herramientas:
 
 El agente conoce la fecha y hora actuales del negocio, consulta la disponibilidad antes de ofrecer horarios, confirma día, hora y nombre antes de agendar y nunca dice que la cita quedó agendada si la herramienta no lo confirmó. Para cambiar una cita cancela la anterior y agenda la nueva. También ve las próximas citas de la persona.
 
-El playground ensaya las herramientas con horarios libres reales, pero no agenda nada. Las llamadas telefónicas todavía no agendan.
+El playground ensaya las herramientas con horarios libres reales, pero no agenda nada. Los agentes de voz tienen las mismas herramientas en una llamada; la cita queda ligada al contacto que llama y su recordatorio va al último chat de ese contacto.
 
 ## Recordatorios
 

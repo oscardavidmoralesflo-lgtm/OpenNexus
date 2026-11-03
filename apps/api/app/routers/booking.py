@@ -119,6 +119,9 @@ def save_settings(
         )):
             item.reminder_due_at = booking.reminder_due(settings, item.starts_at)
     db.commit()
+    # Phone lines carry the booking tools in their setup: write them again.
+    from ..services.phone_calls import refresh_lines_soon
+    refresh_lines_soon(db, client_id=client.id)
     return _settings_out(settings)
 
 

@@ -672,3 +672,31 @@ def test_a_call_whose_report_never_came_is_finished_from_elevenlabs(authenticate
         assert calls["conv_live"].ended_at is None and calls["conv_new"].ended_at is None
         # One ElevenLabs does not know is closed without a transcript.
         assert calls["conv_gone"].ended_at is not None and "no record" in calls["conv_gone"].end_reason
+
+
+def test_the_agent_books_an_appointment_on_a_call(authenticated_client: TestClient, provisioning):
+    from datetime import datetime, timezone
+    from app.models import Appointment
+
+    client = authenticated_client
+    customer, agent, line = _line(client)
+    every_day = [{"day": day, "start": "09:00", "end": "11:00"} for day in range(7)]
+    saved = client.put(f"/api/clients/{customer['id']}/booking", json={
+        "enabled": True, "duration_minutes": 60, "slots": every_day, "min_notice_minutes": 0, "location": "Calle 1"})
+    assert saved.status_code == 200
+    assert agent["id"] in provisioning["refreshed"]  # the line gets the booking tools soon
+    _resync(line["id"])
+    assert {"check_availability", "book_appointment", "cancel_appointment"} <= set(_tools(provisioning))
+
+    token = provisioning["token"]
+    started = _call(client, line["id"], "start", {"conversation_id": "conv_live", "caller_id": CALLER}, token).json()
+    assert "check_availability" in started["dynamic_variables"]["caller_context"]
+
+    day = (datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
+    free = _call(client, line["id"], "tools/check_availability", _tool_body("check_availability", date=day, days=1), token)
+    assert "09:00, 10:00" in free.json()["result"]
+    booked = _call(client, line["id"], "tools/book_appointment", {**_tool_body("book_appointment", start=f"{day} 09:00"), "name": "Ana"}, token)
+    assert "Booked for Ana" in booked.json()["result"]
+    with SessionLocal() as db:
+        item = db.scalar(select(Appointment))
+        assert item.name == "Ana" and item.contact_id is not None and item.phone == CALLER.lstrip("+")

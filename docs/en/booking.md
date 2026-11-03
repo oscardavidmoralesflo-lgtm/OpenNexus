@@ -24,7 +24,7 @@ The agent receives three tools:
 
 The agent is told the business's current date and time, to check availability before offering times, to confirm the day, time and name before booking, and never to say an appointment is booked unless the tool confirmed it. To move an appointment it cancels the old one and books the new one. The agent also sees the person's upcoming appointments.
 
-The playground rehearses the tools with real free times, but books nothing. Phone calls do not book yet.
+The playground rehearses the tools with real free times, but books nothing. Voice agents get the same tools on a call; the appointment is tied to the caller's contact, and its reminder goes to that contact's latest chat.
 
 ## Reminders
 

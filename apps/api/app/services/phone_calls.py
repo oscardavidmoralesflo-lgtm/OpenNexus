@@ -38,6 +38,7 @@ from ..database import new_session
 from ..models import Agent, AgentTool, CallAccount, Conversation, Message, PhoneCall, PhoneChannel, now_utc
 from ..security import decrypt_secret, encrypt_secret
 from . import contacts
+from . import booking
 from .capture import CapturedValue, FieldDefinition, apply_captures, build_capture_spec, capture_context, field_definitions
 from .conversation_state import set_status
 from .escalation import EscalationRequest, active_rules, apply_escalation, build_escalation_spec, escalation_enabled, escalation_prompt
@@ -456,6 +457,10 @@ def call_tools(db: Session, line: PhoneChannel) -> CallTools:
         if agent.escalation_builtin_enabled or escalation_enabled(db, agent, rules):
             tools.escalation_rules = rules
             tools.specs.append(build_escalation_spec(rules, tools.escalation, builtin_enabled=agent.escalation_builtin_enabled))
+    # The appointment book: registered with the line here; on a call the
+    # tools run against that call's conversation (see run_tool).
+    booking_specs, _ = booking.build_booking_specs(db, agent, _ANY_CALLER, booking.BookingChanges())
+    tools.specs.extend(booking_specs)
     rows = db.scalars(select(AgentTool).where(AgentTool.agent_id == agent.id, AgentTool.enabled.is_(True))).all()
     tools.specs.extend(build_tool_specs(list(rows)))
     return tools
@@ -902,7 +907,8 @@ def start_call(db: Session, line: PhoneChannel, payload: dict) -> dict:
         conversation = _open_call(db, line, call_id, _known(payload.get("caller_id")))
         definitions = field_definitions(db, line.client_id, lang)
         variables[PENDING_VAR] = capture_context(agent, conversation, definitions, lang)
-        known = [contact_context(conversation, lang, definitions), contacts.previous_conversation_recap(db, conversation)]
+        _, booking_rules = booking.build_booking_specs(db, agent, conversation, booking.BookingChanges())
+        known = [contact_context(conversation, lang, definitions), contacts.previous_conversation_recap(db, conversation), booking_rules]
         variables[CALLER_VAR] = "\n\n".join(part for part in known if part)
         db.commit()
     return {"type": "conversation_initiation_client_data", "dynamic_variables": variables}
@@ -923,6 +929,16 @@ async def run_tool(db: Session, line: PhoneChannel, name: str, payload: dict) ->
     if name == KNOWLEDGE_TOOL:
         found = await retrieve_knowledge(db, line.agent, str(args.get("query") or ""), full_up_to=0)
         result, is_error = found.text or "Nothing in the documents matches that.", False
+    elif name in booking.TOOL_NAMES:
+        if conversation is None:
+            return "The appointment book needs the call to be known. Offer to have the team call back.", True
+        changes = booking.BookingChanges()
+        specs, _ = booking.build_booking_specs(db, line.agent, conversation, changes)
+        live = find_spec(specs, name)
+        if live is None:
+            return "Booking is not available right now.", True
+        result, is_error, _ = await execute_spec(live, _decoded(live, args))
+        booking.apply_bookings(db, line.agent, conversation, changes)
     else:
         result, is_error, _ = await execute_spec(spec, _decoded(spec, args))
     if conversation is not None:
