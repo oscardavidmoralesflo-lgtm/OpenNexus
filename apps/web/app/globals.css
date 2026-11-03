@@ -3081,3 +3081,4 @@ textarea[data-overflow="true"]::-webkit-scrollbar-thumb { border-radius: 8px; ba
   .booking-item { flex-wrap: wrap; }
   .booking-actions { width: 100%; justify-content: flex-end; }
 }
+.access-forgot { align-self: center; margin-top: 2px; font-size: 13px; }

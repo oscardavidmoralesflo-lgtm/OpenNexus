@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     # Rate limiting on public/unauthenticated endpoints (per client IP). Disable
     # only for tests or when a proxy in front already enforces limits.
     rate_limit_enabled: bool = True
+    # Outgoing e-mail, used for password resets. Without a host nothing is
+    # sent and the sign-in page does not offer the reset.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    # "starttls" (port 587), "ssl" (port 465) or "none".
+    smtp_security: str = "starttls"
     # SSRF guard for agent HTTP tools: URLs resolving to private/loopback
     # addresses are rejected. Enable only on self-hosted deployments that need
     # tools to reach internal services.

@@ -35,6 +35,36 @@ def decode_access_token(token: str) -> str | None:
     return payload.get("sub")
 
 
+PASSWORD_RESET_MINUTES = 30
+
+
+def _password_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
+
+
+def create_password_reset_token(user_id: str, password_hash: str) -> str:
+    """A link token to set a new password. It names the current password, so
+    it stops working once the password changes: it can be used only once."""
+    expires = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_MINUTES)
+    payload = {"sub": user_id, "type": "reset", "ph": _password_fingerprint(password_hash), "exp": expires}
+    return jwt.encode(payload, get_settings().secret_key, algorithm="HS256")
+
+
+def decode_password_reset_token(token: str) -> tuple[str, str] | None:
+    """(user id, password fingerprint) from a reset token, or None."""
+    try:
+        payload = jwt.decode(token, get_settings().secret_key, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+    if payload.get("type") != "reset" or not payload.get("sub") or not payload.get("ph"):
+        return None
+    return payload["sub"], payload["ph"]
+
+
+def reset_token_matches(fingerprint: str, password_hash: str) -> bool:
+    return fingerprint == _password_fingerprint(password_hash)
+
+
 TWO_FACTOR_CHALLENGE_MINUTES = 5
 
 
