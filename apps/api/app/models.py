@@ -129,6 +129,8 @@ class Client(Base):
     portal_domain: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     portal_domain_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     portal_domain_token: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # The sales pipeline: agents move contacts through its stages.
+    pipeline_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
@@ -777,6 +779,12 @@ class Contact(Base):
     # A blocked contact talks to a wall: their messages are stored but nobody
     # answers, nothing rings, and their conversations leave the inboxes.
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Where the contact stands in the client's sales pipeline
+    # (services.pipeline.STAGES); None reads as "new".
+    stage: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # What the deal is worth, in the client's own currency.
+    deal_value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 

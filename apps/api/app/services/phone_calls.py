@@ -38,7 +38,7 @@ from ..database import new_session
 from ..models import Agent, AgentTool, CallAccount, Conversation, Message, PhoneCall, PhoneChannel, now_utc
 from ..security import decrypt_secret, encrypt_secret
 from . import contacts
-from . import booking
+from . import booking, pipeline
 from .capture import CapturedValue, FieldDefinition, apply_captures, build_capture_spec, capture_context, field_definitions
 from .conversation_state import set_status
 from .escalation import EscalationRequest, active_rules, apply_escalation, build_escalation_spec, escalation_enabled, escalation_prompt
@@ -461,6 +461,9 @@ def call_tools(db: Session, line: PhoneChannel) -> CallTools:
     # tools run against that call's conversation (see run_tool).
     booking_specs, _ = booking.build_booking_specs(db, agent, _ANY_CALLER, booking.BookingChanges())
     tools.specs.extend(booking_specs)
+    stage_spec, _ = pipeline.build_stage_spec(db, agent, _ANY_CALLER, pipeline.StageChanges())
+    if stage_spec:
+        tools.specs.append(stage_spec)
     rows = db.scalars(select(AgentTool).where(AgentTool.agent_id == agent.id, AgentTool.enabled.is_(True))).all()
     tools.specs.extend(build_tool_specs(list(rows)))
     return tools
@@ -908,7 +911,8 @@ def start_call(db: Session, line: PhoneChannel, payload: dict) -> dict:
         definitions = field_definitions(db, line.client_id, lang)
         variables[PENDING_VAR] = capture_context(agent, conversation, definitions, lang)
         _, booking_rules = booking.build_booking_specs(db, agent, conversation, booking.BookingChanges())
-        known = [contact_context(conversation, lang, definitions), contacts.previous_conversation_recap(db, conversation), booking_rules]
+        _, stage_rules = pipeline.build_stage_spec(db, agent, conversation, pipeline.StageChanges())
+        known = [contact_context(conversation, lang, definitions), contacts.previous_conversation_recap(db, conversation), booking_rules, stage_rules]
         variables[CALLER_VAR] = "\n\n".join(part for part in known if part)
         db.commit()
     return {"type": "conversation_initiation_client_data", "dynamic_variables": variables}
@@ -939,6 +943,15 @@ async def run_tool(db: Session, line: PhoneChannel, name: str, payload: dict) ->
             return "Booking is not available right now.", True
         result, is_error, _ = await execute_spec(live, _decoded(live, args))
         booking.apply_bookings(db, line.agent, conversation, changes)
+    elif name == pipeline.TOOL_NAME:
+        if conversation is None:
+            return "The call is not known yet.", True
+        moved = pipeline.StageChanges()
+        live, _ = pipeline.build_stage_spec(db, line.agent, conversation, moved)
+        if live is None:
+            return "The pipeline is not available for this caller.", True
+        result, is_error, _ = await execute_spec(live, _decoded(live, args))
+        pipeline.apply_stage(db, conversation, moved)
     else:
         result, is_error, _ = await execute_spec(spec, _decoded(spec, args))
     if conversation is not None:

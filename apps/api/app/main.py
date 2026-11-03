@@ -15,6 +15,7 @@ from .routers import (
     agency,
     agent_tests,
     booking,
+    pipeline,
     agent_tools,
     agents,
     audit,
@@ -179,3 +180,4 @@ app.include_router(phone.public_router, prefix="/api")
 app.include_router(agent_tests.router, prefix="/api")
 app.include_router(client_report.router, prefix="/api")
 app.include_router(booking.router, prefix="/api")
+app.include_router(pipeline.router, prefix="/api")

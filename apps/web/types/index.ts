@@ -758,3 +758,11 @@ export type Appointment = {
   source: "agent" | "team"; agent_name: string | null; conversation_id: string | null; reminder_due_at: string | null;
   reminder_sent_at: string | null; reminder_error: string | null; created_at: string;
 };
+
+export type PipelineStage = "new" | "qualified" | "booked" | "won" | "lost";
+export type PipelineCard = {
+  id: string; name: string; phone: string | null; email: string | null; stage: PipelineStage; deal_value: number | null;
+  stage_changed_at: string | null; last_conversation_id: string | null; last_activity_at: string; last_channel: string | null;
+  tags: { name: string; color: string }[];
+};
+export type PipelineBoard = { enabled: boolean; stages: { stage: PipelineStage; total: number; value: number; contacts: PipelineCard[] }[] };

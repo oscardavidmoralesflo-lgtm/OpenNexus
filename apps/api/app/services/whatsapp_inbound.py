@@ -32,6 +32,7 @@ from .providers import DEFAULT_PROVIDER, resolve_agent_credentials, resolve_mode
 from .tools import run_completion
 from .usage import record_usage, schedule_generation_reconcile
 from .booking import BookingChanges, apply_bookings, build_booking_specs
+from .pipeline import StageChanges, apply_stage, build_stage_spec
 from .capture import apply_captures, build_capture_spec, capture_context, field_definitions
 from .escalation import (
     active_rules as escalation_active_rules,
@@ -485,9 +486,13 @@ async def _reply_with_ai(db: Session, channel, conversation: Conversation, retri
     booking_specs, booking_rules = build_booking_specs(db, agent, conversation, booking_changes)
     if booking_rules:
         system_content += "\n\n" + booking_rules
+    stage_changes = StageChanges()
+    stage_spec, stage_rules = build_stage_spec(db, agent, conversation, stage_changes)
+    if stage_rules:
+        system_content += "\n\n" + stage_rules
     extra_specs = [
         *(escalation_specs or []), *([capture_spec] if capture_spec else []), *([resolution_spec] if resolution_spec else []),
-        *([media_spec] if media_spec else []), *booking_specs,
+        *([media_spec] if media_spec else []), *booking_specs, *([stage_spec] if stage_spec else []),
     ] or None
     messages = [
         {"role": "system", "content": system_content},
@@ -586,6 +591,7 @@ async def _reply_with_ai(db: Session, channel, conversation: Conversation, retri
     channel.last_error = None
     apply_captures(db, conversation, capture_holder, definitions)
     apply_bookings(db, agent, conversation, booking_changes)
+    apply_stage(db, conversation, stage_changes)
     if escalation_holder and conversation.channel in ("instagram", "messenger"):
         request = escalation_holder[-1]
         conversation.social_pending_escalation = {

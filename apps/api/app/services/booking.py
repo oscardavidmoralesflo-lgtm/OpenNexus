@@ -22,6 +22,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import Agent, Appointment, BookingSettings, Client, Contact, Conversation, now_utc
+from . import pipeline
 from .availability import check_slots, minutes_of
 from .report_operations import safe_tz
 from .tools.specs import ToolSpec
@@ -392,6 +393,7 @@ def apply_bookings(db: Session, agent: Agent, conversation: Conversation, change
             notes=item["notes"], source="agent", agent=agent, conversation=conversation,
             contact_id=conversation.contact_id,
         ))
+        pipeline.after_booking(db, conversation.contact_id)
         db.flush()
     return made
 
