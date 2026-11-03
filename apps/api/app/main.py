@@ -14,6 +14,7 @@ from .routers import (
     account,
     agency,
     agent_tests,
+    booking,
     agent_tools,
     agents,
     audit,
@@ -74,6 +75,7 @@ async def _follow_up_loop() -> None:
     """Send due follow-ups and apply pending resolutions on a timer. Phone
     calls whose end-of-call report never arrived are finished on the same
     timer."""
+    from .services.booking import send_due_reminders
     from .services.follow_ups import run_due
     from .services.phone_calls import reconcile_calls
 
@@ -84,6 +86,11 @@ async def _follow_up_loop() -> None:
                 await run_due(db)
         except Exception:  # noqa: BLE001 - a failed sweep must not stop the next one
             logger.exception("Follow-up sweep failed")
+        try:
+            with new_session() as db:
+                await send_due_reminders(db)
+        except Exception:  # noqa: BLE001
+            logger.exception("Appointment reminder sweep failed")
         try:
             with new_session() as db:
                 await reconcile_calls(db)
@@ -171,3 +178,4 @@ app.include_router(phone.router, prefix="/api")
 app.include_router(phone.public_router, prefix="/api")
 app.include_router(agent_tests.router, prefix="/api")
 app.include_router(client_report.router, prefix="/api")
+app.include_router(booking.router, prefix="/api")

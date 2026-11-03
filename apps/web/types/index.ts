@@ -747,3 +747,14 @@ export type AgentTestCase = {
 };
 
 export type AgentTestSuite = { cases: AgentTestCase[]; pass_score: number; passed: number; failed: number; not_run: number };
+
+export type BookingSettings = {
+  enabled: boolean; duration_minutes: number; slots: ScheduleSlot[]; capacity: number; min_notice_minutes: number;
+  max_days_ahead: number; location: string; reminder_enabled: boolean; reminder_hours: number;
+};
+export type AppointmentStatus = "confirmed" | "cancelled" | "completed" | "no_show";
+export type Appointment = {
+  id: string; name: string; phone: string; notes: string; starts_at: string; ends_at: string; status: AppointmentStatus;
+  source: "agent" | "team"; agent_name: string | null; conversation_id: string | null; reminder_due_at: string | null;
+  reminder_sent_at: string | null; reminder_error: string | null; created_at: string;
+};
