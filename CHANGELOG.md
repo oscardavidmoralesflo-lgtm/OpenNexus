@@ -59,6 +59,8 @@ Docker stack; run `alembic upgrade head` on local setups).
 - Document the host tools required for the Docker quickstart.
 
 ### Changed
+
+- The sidebar no longer shows the Discord and GitHub links unless `NEXT_PUBLIC_COMMUNITY_LINKS` names them (for example `discord,github`).
 - The product is now called **Agentaria** ("AI agents for agencies"): new logo, favicon, accent colors and copy. Storage keys, the DNS challenge prefix, the MCP server id, Docker names and environment variables keep `opennexus`, so upgrades need nothing.
 - Language and appearance moved from Settings to an account menu at the foot of the sidebar, with compact language codes and theme icons. A stored key's card replaces and removes it with icon buttons, each asking to confirm, and pausing or resuming a provider key asks too.
 - New client goes straight on to its first agent, chat or voice, from one create button.
