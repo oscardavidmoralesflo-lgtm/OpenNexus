@@ -1,4 +1,4 @@
-"""The signed-in person's own security: two-step verification."""
+"""The signed-in person's own security: password and two-step verification."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -8,7 +8,7 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import User
 from ..ratelimit import login_rate_limit
-from ..security import decrypt_secret, encrypt_secret, verify_password
+from ..security import decrypt_secret, encrypt_secret, hash_password, verify_password
 from ..services import totp
 from ..services.account_security import check_second_factor
 
@@ -34,6 +34,11 @@ class CodeIn(BaseModel):
 class DisableIn(BaseModel):
     password: str = Field(min_length=1, max_length=128)
     code: str = Field(min_length=6, max_length=20)
+
+
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class RecoveryCodesOut(BaseModel):
@@ -105,3 +110,13 @@ def two_factor_disable(payload: DisableIn, db: Session = Depends(get_db), user: 
     user.recovery_codes = []
     db.commit()
     return _status(user)
+
+
+@router.post("/password", status_code=204, dependencies=[Depends(login_rate_limit)])
+def change_password(payload: PasswordChangeIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="The current password is not valid")
+    if payload.new_password == payload.current_password:
+        raise HTTPException(status_code=400, detail="The new password must be different")
+    user.password_hash = hash_password(payload.new_password)
+    db.commit()

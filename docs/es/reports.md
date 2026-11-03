@@ -33,3 +33,7 @@ Ambas necesitan sesión de agencia y solo ven las filas de esa agencia.
 
 - [Proveedores de IA](ai-providers.md): de dónde sale el costo de cada respuesta.
 - [Agentes](agents.md): elige el modelo con el que responde cada agente.
+
+## Reporte mensual del cliente
+
+**Reporte mensual**, en la página de un cliente, abre un reporte de una página de un mes (por defecto el último mes completo) para imprimir o guardar como PDF y enviárselo al cliente: conversaciones y el cambio frente al mes anterior, el porcentaje resuelto por la IA sin una persona, la primera respuesta mediana, contactos nuevos, conversaciones que tomó tu equipo, conversaciones por día y por canal, y mensajes recibidos y respondidos. **Tiempo ahorrado** es un estimado de 2 minutos por respuesta de IA, indicado en el reporte. La fila de costo de IA solo aparece si marcas **Mostrar costo de IA**. Se excluyen los ensayos del playground y las pruebas de calidad. API: `GET /api/clients/{id}/monthly-report?month=YYYY-MM`.

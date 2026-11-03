@@ -128,7 +128,34 @@ def dashboard_metrics(
     ).all()
     usage_by_model = [{"model": model, "input_tokens": input_tokens, "output_tokens": output_tokens} for model, input_tokens, output_tokens in usage_rows]
 
+    # What the AI did for the agency in the window: the value numbers on Home.
+    window = (Conversation.agency_id == agency_id, Conversation.created_at >= since, active_case)
+    reply_seconds = func.extract("epoch", Conversation.first_reply_at - Conversation.created_at)
+    total, ai_resolved, first_reply = db.execute(
+        select(
+            func.count(Conversation.id),
+            func.count(Conversation.id).filter(Conversation.resolved_at.is_not(None), Conversation.taken_over_at.is_(None)),
+            func.percentile_cont(0.5).within_group(reply_seconds),
+        ).where(*window)
+    ).one()
+    ai_replies = db.scalar(
+        select(func.count(Message.id))
+        .join(Conversation, Message.conversation_id == Conversation.id)
+        .where(Conversation.agency_id == agency_id, Message.created_at >= since,
+               Message.sender_type == "ai", Message.is_historical.is_(False))
+    ) or 0
+    cost = db.scalar(
+        select(func.coalesce(func.sum(UsageRecord.cost_usd), 0))
+        .where(UsageRecord.agency_id == agency_id, UsageRecord.created_at >= since)
+    ) or 0
+
     return {
+        "conversations": int(total or 0),
+        "ai_resolved": int(ai_resolved or 0),
+        "ai_resolved_pct": round(100 * int(ai_resolved or 0) / total, 1) if total else 0.0,
+        "first_reply_median_s": round(float(first_reply), 1) if first_reply is not None else None,
+        "ai_replies": int(ai_replies),
+        "ai_cost_usd": round(float(cost), 4),
         "messages": messages,
         "human_conversations": human_conversations,
         "by_channel": by_channel,

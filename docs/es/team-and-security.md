@@ -31,6 +31,19 @@ Un propietario puede **exigir la verificación en dos pasos** a todo el equipo e
 **Configuración → Equipo → Política de seguridad**. Quien no la tenga es enviado a
 Seguridad y no puede usar nada más hasta configurarla.
 
+## Contraseña y acceso perdido
+
+**Configuración → Seguridad → Contraseña** cambia tu propia contraseña; pide la actual.
+
+No hay recuperación por correo. Si el propietario pierde la contraseña, ejecuta esto en el servidor y entra con la contraseña que imprime una sola vez (el cambio queda en el registro de actividad):
+
+```bash
+docker compose --env-file .env.docker exec api python -m app.account_admin users
+docker compose --env-file .env.docker exec api python -m app.account_admin reset-password owner@example.com
+```
+
+Agrega `--disable-2fa` si también se perdió la app de autenticación; desactiva la verificación en dos pasos de esa persona para que la configure de nuevo.
+
 ## Registro de actividad
 
 **Configuración → Actividad** muestra cada cambio hecho en el panel y cada inicio de sesión, del más reciente al más antiguo: cuándo pasó, quién lo hizo, qué cambió y desde qué dirección IP. Los inicios de sesión fallidos de una cuenta real aparecen en rojo. Lo leen owners y admins; operadores y lectores no.

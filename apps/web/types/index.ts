@@ -733,3 +733,17 @@ export type ConversationReportRow = {
 };
 export type ConversationReportPage = { items: ConversationReportRow[]; total: number; summary: OpsMetrics };
 export type ConversationFacets = { with_ad: number; without_ad: number; facets: { key: string; values: { value: string; count: number }[] }[] };
+
+export type AgentTestCase = {
+  id: string;
+  question: string;
+  expectation: string;
+  last_answer: string | null;
+  last_passed: boolean | null;
+  last_score: number | null;
+  last_reason: string | null;
+  last_run_at: string | null;
+  created_at: string;
+};
+
+export type AgentTestSuite = { cases: AgentTestCase[]; pass_score: number; passed: number; failed: number; not_run: number };

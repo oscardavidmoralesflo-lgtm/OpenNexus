@@ -53,6 +53,7 @@ export function SecuritySection() {
   if (!status) return <FormSkeleton sections={2} />;
   return <div className="page-form">
     {status.required_by_agency && !status.enabled && <Alert type="info">{t("settings.security.requiredNotice")}</Alert>}
+    <PasswordSection />
     <section className="form-section">
       <div className="section-copy"><h2>{t("settings.security.heading")}</h2><p>{t("settings.security.copy")}</p></div>
       <div className="form-fields">
@@ -105,6 +106,34 @@ export function SecuritySection() {
       onClose={() => setDisabling(false)}
       onSubmit={async (value) => { setStatus(await api<TwoFactorStatus>("/account/2fa/disable", { method: "POST", body: JSON.stringify(value) })); setDisabling(false); toast.success(t("settings.security.disabled")); }} />}
   </div>;
+}
+
+// Change the password the signed-in person uses to sign in.
+function PasswordSection() {
+  const t = useT();
+  const toast = useToast();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const mismatch = confirm.length > 0 && next !== confirm;
+  async function save() {
+    setBusy(true);
+    try {
+      await api("/account/password", { method: "POST", body: JSON.stringify({ current_password: current, new_password: next }) });
+      setCurrent(""); setNext(""); setConfirm(""); toast.success(t("settings.passwordChange.saved"));
+    } catch (err) { toast.error(messageFrom(err)); } finally { setBusy(false); }
+  }
+  return <section className="form-section">
+    <div className="section-copy"><h2>{t("settings.passwordChange.heading")}</h2><p>{t("settings.passwordChange.copy")}</p></div>
+    <form className="form-fields" onSubmit={(e) => { e.preventDefault(); save(); }}>
+      <label>{t("settings.passwordChange.current")}<PasswordInput value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" /></label>
+      <label>{t("settings.passwordChange.next")}<PasswordInput value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" minLength={8} /></label>
+      <label>{t("settings.passwordChange.confirm")}<PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" /></label>
+      {mismatch && <Alert>{t("settings.passwordChange.mismatch")}</Alert>}
+      <button type="submit" className="button primary align-start" disabled={busy || !current || next.length < 8 || next !== confirm}>{busy ? <LoaderCircle className="spin" size={16} /> : <KeyRound size={16} />} {t("settings.passwordChange.save")}</button>
+    </form>
+  </section>;
 }
 
 function CodeModal({ title, description, withPassword, onClose, onSubmit }: {

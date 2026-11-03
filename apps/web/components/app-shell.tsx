@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSelectedLayoutSegments } from "next/navigation";
 import { ReactNode, useEffect, useLayoutEffect, useState } from "react";
-import { BarChart3, Bot, Building2, CreditCard, Inbox, LayoutDashboard, Menu, PanelLeftClose, PanelLeftOpen, Settings, Sparkles, Wallet, X } from "lucide-react";
+import { BarChart3, Bot, Building2, CreditCard, Inbox, LayoutDashboard, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Sparkles, Wallet, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useLanguage, type I18nKey } from "@/lib/i18n";
 import { CommunityLinks } from "@/components/community-links";
 import { UserMenu } from "@/components/user-menu";
+import { CommandPalette } from "@/components/command-palette";
 import { appShellExtensions } from "@/lib/extensions/app-shell";
 import { CurrentUserContext, isManager } from "@/lib/current-user";
 import type { User } from "@/types";
@@ -21,6 +22,12 @@ const navigation: { href: string; labelKey: I18nKey; icon: typeof LayoutDashboar
   { href: "/sandbox", labelKey: "nav.sandbox", icon: Sparkles },
 ];
 // Settings closes the list, after whatever a deployment adds.
+// "⌘K" on Apple devices, "Ctrl K" elsewhere.
+function shortcutLabel() {
+  if (typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) return "⌘K";
+  return "Ctrl K";
+}
+
 const settingsEntry = { href: "/settings", labelKey: "nav.settings" as I18nKey, icon: Settings };
 
 // The sidebar can fold to its icons; the choice is kept per browser.
@@ -60,6 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(pathname !== "/login");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   useLayoutEffect(() => {
     try { setCollapsed(localStorage.getItem(COLLAPSED_KEY) === "1"); } catch {}
   }, []);
@@ -131,6 +139,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label={t("shell.closeMenu")}><X /></button>
         </div>
         {WorkspaceLabel ? <WorkspaceLabel user={user}>{workspaceLabel}</WorkspaceLabel> : workspaceLabel}
+        <button type="button" className="sidebar-search" onClick={() => { setMobileOpen(false); setPaletteOpen(true); }} title={t("palette.title")} aria-label={t("palette.title")}>
+          <Search size={15} /><span>{t("palette.button")}</span><kbd>{shortcutLabel()}</kbd>
+        </button>
         <nav>
           <span className="nav-label">{t("nav.section")}</span>
           {navigation.filter((item) => item.href !== "/sandbox" || isManager(user.role)).map((item) => {
@@ -150,6 +161,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <UserMenu name={user.name} detail={user.email} onLogout={logout} />
         </div>
       </aside>
+      <CommandPalette user={user} open={paletteOpen} onOpenChange={setPaletteOpen} />
       <main className="main-content"><CurrentUserContext.Provider value={user}>{children}</CurrentUserContext.Provider></main>
     </div>
   );

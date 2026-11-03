@@ -1529,3 +1529,24 @@ class AuditEvent(Base):
     ip: Mapped[str] = mapped_column(String(64), default="")
     user_agent: Mapped[str] = mapped_column(String(300), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class AgentTestCase(Base):
+    """A question the agency asks an agent to check its answers, with what a
+    good answer must do. The quality lab runs it against the agent's current
+    setup and keeps the latest verdict on the case itself."""
+
+    __tablename__ = "agent_test_cases"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    # In plain words: what the answer must include, or must not say.
+    expectation: Mapped[str] = mapped_column(Text, default="")
+    last_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    last_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

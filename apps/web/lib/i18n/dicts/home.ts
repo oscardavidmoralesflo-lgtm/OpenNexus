@@ -26,6 +26,16 @@ const en = {
     channels: "Channels",
     channelsConnected: "{count} connected",
   },
+  value: {
+    aiResolved: "Resolved by AI",
+    aiResolvedCaption: "{solved} of {total} conversations, no person needed",
+    firstReply: "First reply",
+    firstReplyCaption: "median time to the first answer",
+    aiReplies: "AI replies",
+    aiRepliesCaption: "messages your agents sent",
+    aiCost: "AI cost",
+    aiCostCaption: "provider charges in this period",
+  },
   range: { days: "Last {count} days" },
   activity: {
     title: "Activity",
@@ -82,6 +92,16 @@ const es: typeof en = {
     conversationsCaption: "historiales guardados",
     channels: "Canales",
     channelsConnected: "{count} conectados",
+  },
+  value: {
+    aiResolved: "Resuelto por IA",
+    aiResolvedCaption: "{solved} de {total} conversaciones, sin una persona",
+    firstReply: "Primera respuesta",
+    firstReplyCaption: "tiempo mediano hasta la primera respuesta",
+    aiReplies: "Respuestas de IA",
+    aiRepliesCaption: "mensajes que enviaron tus agentes",
+    aiCost: "Costo de IA",
+    aiCostCaption: "cobro del proveedor en este periodo",
   },
   range: { days: "Últimos {count} días" },
   activity: {
