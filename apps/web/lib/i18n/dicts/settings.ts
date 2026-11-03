@@ -46,6 +46,16 @@ const en = {
     requireTwoFactorHint: "Members without it are sent to set it up before they can use the dashboard.",
     policySaved: "Policy saved.",
   },
+  passwordChange: {
+    heading: "Password",
+    copy: "Change the password you sign in with. Use at least 8 characters.",
+    current: "Current password",
+    next: "New password",
+    confirm: "Repeat the new password",
+    mismatch: "The two new passwords do not match.",
+    save: "Change password",
+    saved: "Password changed.",
+  },
   security: {
     heading: "Two-step verification",
     copy: "Besides your password, sign-in asks for a code from an app on your phone. Even if someone learns your password, they cannot get in.",
@@ -310,6 +320,16 @@ const es: typeof en = {
     requireTwoFactor: "Exigir verificación en dos pasos",
     requireTwoFactorHint: "Quien no la tenga deberá configurarla antes de usar el panel.",
     policySaved: "Política guardada.",
+  },
+  passwordChange: {
+    heading: "Contraseña",
+    copy: "Cambia la contraseña con la que entras. Usa al menos 8 caracteres.",
+    current: "Contraseña actual",
+    next: "Contraseña nueva",
+    confirm: "Repite la contraseña nueva",
+    mismatch: "Las dos contraseñas nuevas no coinciden.",
+    save: "Cambiar contraseña",
+    saved: "Contraseña cambiada.",
   },
   security: {
     heading: "Verificación en dos pasos",

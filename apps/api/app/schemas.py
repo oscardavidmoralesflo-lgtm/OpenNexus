@@ -1301,6 +1301,12 @@ class RepliesPage(BaseModel):
 
 
 class DashboardMetrics(BaseModel):
+    conversations: int = 0
+    ai_resolved: int = 0
+    ai_resolved_pct: float = 0.0
+    first_reply_median_s: float | None = None
+    ai_replies: int = 0
+    ai_cost_usd: float = 0.0
     messages: int
     human_conversations: int
     by_channel: dict[str, int]

@@ -30,6 +30,19 @@ An owner can **require two-step verification** for the whole team under
 **Settings → Team → Security policy**. Members who have not set it up are sent
 to Security and can use nothing else until they do.
 
+## Password and lost access
+
+**Settings → Security → Password** changes your own password; it asks for the current one.
+
+There is no reset by email. If the owner loses the password, run this on the server and sign in with the password it prints once (the change shows in the activity log):
+
+```bash
+docker compose --env-file .env.docker exec api python -m app.account_admin users
+docker compose --env-file .env.docker exec api python -m app.account_admin reset-password owner@example.com
+```
+
+Add `--disable-2fa` when the authenticator app is lost too; it turns off two-step verification for that person so they can set it up again.
+
 ## Activity log
 
 **Settings → Activity** lists every change made in the dashboard and every sign-in, newest first: when it happened, who did it, what changed and the IP address it came from. Failed sign-ins for a real account show in red. Owners and admins read it; operators and viewers do not.
