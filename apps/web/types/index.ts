@@ -766,3 +766,18 @@ export type PipelineCard = {
   tags: { name: string; color: string }[];
 };
 export type PipelineBoard = { enabled: boolean; stages: { stage: PipelineStage; total: number; value: number; contacts: PipelineCard[] }[] };
+
+export type CampaignStatus = "draft" | "scheduled" | "sending" | "done" | "cancelled";
+export type CampaignStats = { total: number; pending: number; sent: number; failed: number; delivered: number; read: number; replied: number };
+export type CampaignAudience = { tag_ids?: string[]; stages?: PipelineStage[] };
+export type Campaign = {
+  id: string; name: string; channel_id: string | null; channel_label: string;
+  template_name: string; template_language: string; variables: Record<string, string>; header_value: string;
+  audience: CampaignAudience; status: CampaignStatus;
+  scheduled_at: string | null; started_at: string | null; finished_at: string | null;
+  last_error: string | null; created_at: string; stats: CampaignStats;
+};
+export type CampaignRecipient = {
+  id: string; name: string; phone: string; status: "pending" | "sent" | "failed"; error: string | null;
+  conversation_id: string | null; sent_at: string | null;
+};
