@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Bot, CheckCircle2, CircleAlert, LoaderCircle, MessageCircle, Plug, Power, QrCode, RefreshCw, ShieldCheck, Smartphone, Trash2 } from "lucide-react";
 import { Alert, Modal } from "@/components/ui";
 import { AccountList } from "@/components/account-list";
+import { BanShield } from "@/components/channels/ban-shield";
 import { ConfirmModal } from "@/components/confirm-modal";
 import { api, messageFrom } from "@/lib/api";
 import { accountName, accountTitle, rememberLine, requestedLine, type ChannelSetupProps } from "@/lib/channels";
@@ -140,6 +141,7 @@ export function WhatsAppSetup({ client, onBack }: ChannelSetupProps) {
         {channel?.last_error && <Alert>{channel.last_error}</Alert>}
         <div className="wa-actions">{channel && <button className="button quiet" onClick={() => setRemoving(true)} disabled={busy}><Trash2 size={16} /> {t("clients.whatsapp.removeLine")}</button>}{channel?.status === "connected" ? <button className="button danger" onClick={() => setDisconnecting(true)} disabled={busy}><Power size={17} /> {t("clients.whatsapp.disconnectAccount")}</button> :<button className="button primary" onClick={saveAndConnect} disabled={!canConnect}>{busy || ["connecting", "reconnecting"].includes(channel?.status || "") ? <LoaderCircle className="spin" size={17} /> : <QrCode size={17} />} {channel?.has_session ? t("clients.whatsapp.recoverConnection") : t("clients.whatsapp.connectWithQr")}</button>}</div>
       </section>
+      {channel?.has_session && <BanShield channelId={channel.id} />}
     </main><aside className="wa-side"><ShieldCheck size={22} /><h3>{t("clients.whatsapp.separationTitle")}</h3><p>{t("clients.whatsapp.separationCopy")}<strong>{client.name}</strong>.</p><hr /><h3>{t("clients.whatsapp.humanControlTitle")}</h3><p>{t("clients.whatsapp.humanControlCopy")}</p></aside></div>}
     {disconnecting && channel && <ConfirmModal title={t("clients.whatsapp.disconnectAccount")} message={t("clients.whatsapp.confirmDisconnect")} confirmLabel={t("clients.whatsapp.disconnectAccount")} cancelLabel={t("common.cancel")} confirmIcon={<Power size={15} />} onConfirm={disconnect} onClose={() => setDisconnecting(false)} />}
     <Modal open={removing && Boolean(channel)} title={t("clients.whatsapp.removeLineTitle", { name: channel ? nameOf(channel) : "" })} onClose={() => setRemoving(false)}>

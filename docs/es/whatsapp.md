@@ -33,6 +33,21 @@ Las imágenes y las notas de voz también se reenvían; cuando el agente tiene h
 
 El backend y el puente se autentican en cada llamada entre sí con un secreto compartido, `WHATSAPP_BRIDGE_TOKEN`. El script de instalación lo genera por ti; consulta [Configuración](configuration.md).
 
+## Escudo anti-baneo
+
+Los números vinculados por QR usan el protocolo de WhatsApp Web, que WhatsApp no ofrece para bots, así que pueden ser baneados. Cada línea por QR tiene un escudo anti-baneo, activo por defecto, que aparece debajo de su conexión:
+
+- **Un navegador normal**: la línea se vincula como WhatsApp Web en Chrome para Windows, no como un dispositivo automatizado. Una línea vinculada antes de esta versión conserva su nombre anterior hasta que se vuelva a vincular.
+- **En línea solo mientras responde**: la línea se conecta cuando lee y escribe, y se desconecta entre 40 y 150 segundos después. Mientras está desconectada, el teléfono sigue recibiendo sus notificaciones.
+- **Límites a lo que la línea inicia**: seguimientos, recordatorios y chats que abre una persona. Las respuestas a quien escribió siempre salen. Un seguimiento o recordatorio frenado se reintenta después en vez de perderse.
+  - Un número nuevo se calienta durante 7 días: 20, 36, 65, 117, 210, 378 y 680 mensajes al día. Después, el límite es de 1.000 al día.
+  - Máximo 200 por hora y 8 por minuto, con 2,5 a 7 segundos al azar entre dos de ellos.
+  - Mensajes a quien nunca escribió: 3 al día los primeros tres días, luego 10.
+  - El mismo texto llega a máximo 5 chats por hora. Cambiar mayúsculas, espacios o puntuación no lo vuelve otro texto.
+- **Pausa ante señales de riesgo**: la línea deja de iniciar mensajes durante 6 horas tras 5 mensajes rechazados o 3 desconexiones en una hora, y durante 24 horas tras un baneo temporal. **Reanudar ahora** quita la pausa a mano.
+
+Las cifras siguen las de las librerías anti-baneo de la comunidad para Baileys y whatsmeow. Bajan el riesgo sin quitarlo. Lo que más pesa es que la gente bloquee o reporte el número, así que escribe primero solo a quien lo espera. Para volumen, usa la [API de WhatsApp Cloud](whatsapp-cloud-api.md).
+
 ## Intervención humana
 
 Cada conversación tiene un `mode`, que es `ai` (el valor por defecto) o `human`. Cuando cambias una conversación al modo human, la IA deja de responderla —el backend sigue registrando los mensajes entrantes, pero no genera ninguna respuesta automática— para que una persona pueda tomar el control y responder directamente desde la [bandeja de entrada](inbox.md) o el [portal del cliente](client-portal.md). Vuelve a `ai` para devolver la conversación al agente.

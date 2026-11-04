@@ -414,12 +414,36 @@ class WhatsAppChannel(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The ban shield (services/whatsapp_guard.py): limits on messages the line
+    # starts, a warm-up for a newly linked number, and a pause on risk signals.
+    guard_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # When the number in ``warmup_number`` was first linked; None counts from created_at.
+    warmup_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    warmup_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    guard_paused_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    guard_pause_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
     client: Mapped[Client] = relationship(back_populates="whatsapp_channels")
     agent: Mapped[Agent] = relationship(back_populates="whatsapp_channels")
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="whatsapp_channel")
+
+
+class WhatsAppSendEvent(Base):
+    """One thing a QR line did or suffered, kept a couple of days so the ban
+    shield can count: a message sent (``reply``, ``operator``, ``proactive``,
+    ``stranger``) or a risk signal (``failed``, ``disconnect``, ``banned``)."""
+
+    __tablename__ = "whatsapp_send_events"
+    __table_args__ = (Index("ix_whatsapp_send_events_channel_time", "channel_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    channel_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("whatsapp_channels.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    # sha256 of the normalized text, to spot the same message sent to many.
+    text_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
 class WhatsAppCloudChannel(Base):

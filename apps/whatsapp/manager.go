@@ -67,6 +67,7 @@ type outboundMedia struct {
 type channelRuntime struct {
 	channelID string
 	client    *whatsmeow.Client
+	presence  *presence
 
 	mu            sync.Mutex
 	stopRequested bool
@@ -144,7 +145,7 @@ func (m *manager) connectChannel(ctx context.Context, channelID string) error {
 	}
 
 	client := whatsmeow.NewClient(device, m.log.Sub(channelID))
-	runtime := &channelRuntime{channelID: channelID, client: client}
+	runtime := &channelRuntime{channelID: channelID, client: client, presence: newPresence()}
 	m.mu.Lock()
 	m.runtimes[channelID] = runtime
 	m.mu.Unlock()
@@ -238,6 +239,9 @@ func (m *manager) handleEvent(runtime *channelRuntime, rawEvt any) {
 
 	case *events.Connected:
 		m.persistMarker(ctx, runtime)
+		if err := runtime.presence.offline(ctx, runtime.client); err != nil {
+			m.log.Warnf("channel %s: could not set the presence: %v", runtime.channelID, err)
+		}
 		extra := map[string]any{}
 		if id := runtime.client.Store.ID; id != nil {
 			extra["phone_number"] = id.User
@@ -434,6 +438,9 @@ func (m *manager) sendMessage(ctx context.Context, channelID, remoteJID, text st
 			ContextInfo: m.quoteContext(runtime, channelID, jid, quoteExternalID),
 		}}
 	}
+	if err := runtime.presence.touch(ctx, runtime.client); err != nil {
+		m.log.Warnf("channel %s: could not go online: %v", channelID, err)
+	}
 	sent, err := m.sendTracked(ctx, channelID, runtime.client, jid, message)
 	if err != nil {
 		return "", err
@@ -609,6 +616,9 @@ func (m *manager) signalRead(ctx context.Context, channelID, remoteJID string, m
 		return err
 	}
 	if typing {
+		if err := runtime.presence.touch(ctx, runtime.client); err != nil {
+			m.log.Warnf("channel %s: could not go online: %v", channelID, err)
+		}
 		if err := runtime.client.SendChatPresence(ctx, chat, types.ChatPresenceComposing, types.ChatPresenceMediaText); err != nil {
 			m.log.Errorf("channel %s: could not send the typing indicator: %v", channelID, err)
 		}
@@ -696,6 +706,7 @@ func (m *manager) shutdown() {
 }
 
 func (m *manager) dropRuntime(runtime *channelRuntime) {
+	runtime.presence.stop()
 	m.mu.Lock()
 	if m.runtimes[runtime.channelID] == runtime {
 		delete(m.runtimes, runtime.channelID)

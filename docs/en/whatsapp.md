@@ -33,6 +33,21 @@ Images and voice notes are forwarded too; when the agent has image or audio unde
 
 Backend and bridge authenticate every call to each other with a shared secret, `WHATSAPP_BRIDGE_TOKEN`. It is generated for you by the setup script — see [Configuration](configuration.md).
 
+## Ban shield
+
+Numbers linked by QR use the WhatsApp Web protocol, which WhatsApp does not offer to bots, so they can be banned. Each QR line has a ban shield, on by default, shown under its connection:
+
+- **A normal browser**: the line links as WhatsApp Web on Chrome for Windows, not as an automated device. A line linked before this release keeps its old name until it is linked again.
+- **Online only while answering**: the line goes online when it reads and types, and offline 40 to 150 seconds after it last did. While offline, the phone keeps its notifications.
+- **Limits on what the line starts**: follow-ups, reminders and chats a person opens. Replies to people who wrote always go out. A held follow-up or reminder is retried later instead of being lost.
+  - A new number warms up over 7 days: 20, 36, 65, 117, 210, 378 and 680 messages a day. After that the limit is 1,000 a day.
+  - At most 200 an hour and 8 a minute, with 2.5 to 7 seconds at random between two of them.
+  - Messages to people who never wrote: 3 a day for the first three days, then 10.
+  - The same text goes to at most 5 chats an hour. Case, spacing and punctuation do not make it a different text.
+- **Pause on risk signals**: the line stops starting messages for 6 hours after 5 refused messages or 3 disconnections in an hour, and for 24 hours after a temporary ban. **Resume now** lifts the pause by hand.
+
+The numbers follow the community anti-ban libraries for Baileys and whatsmeow. They lower the risk without removing it. What weighs most is people blocking or reporting the number, so write first only to people who expect it. For volume, use the [WhatsApp Cloud API](whatsapp-cloud-api.md).
+
 ## Human takeover
 
 Every conversation has a `mode`, either `ai` (the default) or `human`. When you switch a conversation to human mode, the AI stops replying to it — the backend still records incoming messages, but generates no automatic answer — so a person can take over and respond directly from the [inbox](inbox.md) or the [client portal](client-portal.md). Switch back to `ai` to hand the conversation to the agent again.
