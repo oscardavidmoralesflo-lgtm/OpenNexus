@@ -470,6 +470,16 @@ async def send_due_reminders(db: Session, *, limit: int = 20) -> int:
             appointment.reminder_error = "The contact cannot be reached on the conversation's channel right now."
             db.commit()
             continue
+        from .whatsapp_guard import hold_for
+        retry_at = hold_for(db, conversation, "proactive")
+        if retry_at:
+            # The ban shield holds it back for now: retry while it is still useful.
+            if retry_at < appointment.starts_at - timedelta(minutes=30):
+                appointment.reminder_due_at = retry_at
+            else:
+                appointment.reminder_error = "The ban shield held the reminder back: the number reached its limits."
+            db.commit()
+            continue
         try:
             message = await _deliver(db, conversation, agent, reminder_text(appointment, agent, client, settings_for(db, client.id)))
         except Exception as exc:  # noqa: BLE001 - one reminder must not stop the rest

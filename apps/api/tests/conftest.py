@@ -41,6 +41,14 @@ def immediate_replies(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_outreach_gap(monkeypatch):
+    """The ban shield spaces out what a QR line starts by a few seconds; tests
+    do not wait for it."""
+    from app.services import whatsapp_guard
+    monkeypatch.setattr(whatsapp_guard, "GAP_SECONDS", (0.0, 0.0))
+
+
+@pytest.fixture(autouse=True)
 def fixed_model_catalog():
     """A known catalog, so no test reads OpenRouter and the prices the cost
     reports are asserted against stay put."""

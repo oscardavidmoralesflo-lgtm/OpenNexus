@@ -1857,7 +1857,7 @@ async def portal_start_conversation(
         external_message_id, text, buttons = await _send_template_to(db, client, contact.phone, payload.template, channel_row)
     else:
         text = payload.text.strip()
-        external_message_id = await send_channel_message(db, conversation, text)
+        external_message_id = await send_channel_message(db, conversation, text, intent="operator")
     record_activity(db, conversation, "started", actor=sender_name)
     db.add(
         Message(
@@ -2278,7 +2278,7 @@ async def portal_reply(
         db.commit()
     quoted_id, quoted_external = resolve_quote(db, conversation, payload.quoted_message_id)
     external_message_id = await send_channel_message(
-        db, conversation, payload.content.strip(), quoted_external_id=quoted_external
+        db, conversation, payload.content.strip(), quoted_external_id=quoted_external, intent="operator",
     )
     db.add(
         Message(

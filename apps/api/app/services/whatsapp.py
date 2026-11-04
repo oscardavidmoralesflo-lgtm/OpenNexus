@@ -10,6 +10,7 @@ from sqlalchemy import select
 from ..config import get_settings
 from ..models import Conversation, Message, WhatsAppCloudChannel
 from ..security import decrypt_secret
+from . import whatsapp_guard
 from .audio import audio_duration_seconds, to_whatsapp_voice
 from .whatsapp_cloud import mark_read, mark_read_with_typing, send_media, send_reaction, send_text, upload_media
 from .whatsapp_format import markdown_to_whatsapp
@@ -17,6 +18,10 @@ from .whatsapp_format import markdown_to_whatsapp
 
 async def bridge_command(method: str, path: str, payload: dict | None = None, timeout: float = 20) -> dict:
     settings = get_settings()
+    if method == "POST" and path.startswith("/channels/") and path.endswith("/disconnect"):
+        # The team unlinks this line: the logout that follows needs no alert.
+        from .alerts import expect_unlink
+        expect_unlink(path.split("/")[2])
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.request(
@@ -41,25 +46,39 @@ async def bridge_command(method: str, path: str, payload: dict | None = None, ti
     return response.json()
 
 
+async def _send_on_qr_line(db: Session, conversation: Conversation, payload: dict, *, text: str, intent: str,
+                           timeout: float = 20) -> str | None:
+    """Send through the bridge behind the ban shield: a message the line
+    starts may be held back (``SendHeld``), and failures count as risk signals."""
+    kind = await whatsapp_guard.before_send(db, conversation, text, intent)
+    try:
+        result = await bridge_command("POST", f"/channels/{conversation.whatsapp_channel_id}/send", payload, timeout=timeout)
+    except HTTPException as exc:
+        if exc.status_code == 502:
+            whatsapp_guard.record_signal(conversation.whatsapp_channel_id, "failed", str(exc.detail or "")[:120])
+        raise
+    whatsapp_guard.record_sent(db, conversation.whatsapp_channel_id, kind, text)
+    return result.get("external_message_id")
+
+
 async def send_channel_message(
-    db: Session, conversation: Conversation, content: str, *, quoted_external_id: str | None = None
+    db: Session, conversation: Conversation, content: str, *, quoted_external_id: str | None = None,
+    intent: str = "reply",
 ) -> str | None:
     """Deliver an operator message through the conversation's channel. Returns
     the external message id, or None for channels without outbound delivery.
 
-    ``quoted_external_id`` sends it as a quoted reply."""
+    ``quoted_external_id`` sends it as a quoted reply. ``intent`` tells the
+    QR ban shield what the message is: ``reply`` (to what the contact just
+    wrote), ``operator`` (typed by the team) or ``proactive`` (the line
+    starts it: follow-ups, reminders)."""
     if conversation.channel == "whatsapp":
         if not conversation.whatsapp_channel_id or not conversation.external_chat_id:
             raise HTTPException(status_code=409, detail="This conversation does not have a valid WhatsApp destination")
         payload = {"remote_jid": conversation.external_chat_id, "text": markdown_to_whatsapp(content)}
         if quoted_external_id:
             payload["quote_external_id"] = quoted_external_id
-        result = await bridge_command(
-            "POST",
-            f"/channels/{conversation.whatsapp_channel_id}/send",
-            payload,
-        )
-        return result.get("external_message_id")
+        return await _send_on_qr_line(db, conversation, payload, text=content, intent=intent)
     if conversation.channel == "whatsapp_cloud":
         if not conversation.whatsapp_cloud_channel_id or not conversation.external_chat_id:
             raise HTTPException(status_code=409, detail="This conversation does not have a valid WhatsApp destination")
@@ -91,6 +110,7 @@ async def send_channel_media(
     mime: str,
     filename: str | None = None,
     caption: str = "",
+    intent: str = "operator",
 ) -> str | None:
     """Deliver an operator media message (image/audio/video/file) through the
     conversation's channel. Returns the external message id, or None for
@@ -109,21 +129,16 @@ async def send_channel_media(
     if conversation.channel == "whatsapp":
         if not conversation.whatsapp_channel_id or not conversation.external_chat_id:
             raise HTTPException(status_code=409, detail="This conversation does not have a valid WhatsApp destination")
-        result = await bridge_command(
-            "POST",
-            f"/channels/{conversation.whatsapp_channel_id}/send",
-            {
-                "remote_jid": conversation.external_chat_id,
-                "text": caption,
-                "media_kind": kind,
-                "media_mime": mime,
-                "media_base64": base64.b64encode(data).decode(),
-                "media_seconds": seconds,
-                "filename": filename,
-            },
-            timeout=90,
-        )
-        return result.get("external_message_id")
+        payload = {
+            "remote_jid": conversation.external_chat_id,
+            "text": caption,
+            "media_kind": kind,
+            "media_mime": mime,
+            "media_base64": base64.b64encode(data).decode(),
+            "media_seconds": seconds,
+            "filename": filename,
+        }
+        return await _send_on_qr_line(db, conversation, payload, text=caption or None, intent=intent, timeout=90)
     if conversation.channel == "whatsapp_cloud":
         if not conversation.whatsapp_cloud_channel_id or not conversation.external_chat_id:
             raise HTTPException(status_code=409, detail="This conversation does not have a valid WhatsApp destination")

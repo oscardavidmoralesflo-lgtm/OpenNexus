@@ -638,6 +638,7 @@ async def send_reply_attachments(db: Session, conversation: Conversation, messag
         try:
             external_id = await send_channel_media(
                 db, conversation, kind=attachment.kind, data=attachment.data, mime=attachment.mime, filename=attachment.filename,
+                intent="reply",
             )
         except HTTPException:
             continue
@@ -788,7 +789,7 @@ async def _deliver_humanized(db: Session, channel, conversation: Conversation, r
             if audio:
                 await signal_channel_read(db, conversation, read_ids, typing=True)
                 await asyncio.sleep(max(0.0, humanize.typing_seconds(spoken, agent.typing_speed_cps) / 2 - (time.monotonic() - typing_since)))
-                external_id = await send_channel_media(db, conversation, kind="audio", data=audio, mime=mime, filename="voice-note.ogg")
+                external_id = await send_channel_media(db, conversation, kind="audio", data=audio, mime=mime, filename="voice-note.ogg", intent="reply")
                 store_attachment(db, outbound, data=audio, mime=mime, kind="audio")
                 outbound.external_message_id = external_id
                 record = record_usage(db, agent.agency_id, agent.id, resolved_voice[0],

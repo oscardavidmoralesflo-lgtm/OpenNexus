@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     smtp_from: str = ""
     # "starttls" (port 587), "ssl" (port 465) or "none".
     smtp_security: str = "starttls"
+    # Who gets operational alerts (a line disconnected, banned or paused), as a
+    # comma-separated list; empty sends them to the agency's owners. Needs SMTP.
+    alert_email: str = ""
+    alert_language: str = "es"
     # SSRF guard for agent HTTP tools: URLs resolving to private/loopback
     # addresses are rejected. Enable only on self-hosted deployments that need
     # tools to reach internal services.

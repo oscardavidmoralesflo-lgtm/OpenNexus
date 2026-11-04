@@ -310,7 +310,7 @@ async def _deliver(db: Session, conversation: Conversation, agent: Agent, text: 
             queue_message(db, conversation, message)
         elif conversation.channel in ("whatsapp", "whatsapp_cloud"):
             from .whatsapp import send_channel_message
-            message.external_message_id = await send_channel_message(db, conversation, text)
+            message.external_message_id = await send_channel_message(db, conversation, text, intent="proactive")
             db.add(message)
         else:
             db.add(message)
@@ -363,6 +363,13 @@ async def _run_step(db: Session, conversation: Conversation, now: datetime) -> N
     if due > now:
         # The schedule was edited after the clock started.
         conversation.follow_up_due_at = due
+        db.commit()
+        return
+    from .whatsapp_guard import hold_for
+    retry_at = hold_for(db, conversation, "proactive", step.text or None)
+    if retry_at:
+        # The ban shield holds back what the line starts: try again later.
+        conversation.follow_up_due_at = retry_at
         db.commit()
         return
     conversation.follow_up_claimed_until = now + _LEASE

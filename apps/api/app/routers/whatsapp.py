@@ -6,6 +6,7 @@ import uuid
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
@@ -25,6 +26,7 @@ from ..schemas import (
     WhatsAppOutgoing,
 )
 from ..security import decrypt_secret, encrypt_secret
+from ..services import alerts, whatsapp_guard
 from ..services.whatsapp import bridge_command
 from ..services.whatsapp_inbound import InboundMessage, process_inbound, send_reply_attachments
 
@@ -218,6 +220,33 @@ async def disconnect_channel(ref: uuid.UUID, db: Session = Depends(get_db), user
     return _public_channel(channel)
 
 
+class GuardSettings(BaseModel):
+    enabled: bool
+
+
+@router.get("/channels/{ref}/guard")
+def get_guard(ref: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """What the ban shield sees for this line: warm-up, today's counts, pause."""
+    return whatsapp_guard.health(db, _channel_for_user(db, user, ref))
+
+
+@router.put("/channels/{ref}/guard")
+def save_guard(ref: uuid.UUID, payload: GuardSettings, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    channel = _channel_for_user(db, user, ref)
+    channel.guard_enabled = payload.enabled
+    db.commit()
+    return whatsapp_guard.health(db, channel)
+
+
+@router.post("/channels/{ref}/guard/resume")
+def resume_guard(ref: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Lift a pause by hand, once the operator checked the number is fine."""
+    channel = _channel_for_user(db, user, ref)
+    channel.guard_paused_until = channel.guard_pause_reason = None
+    db.commit()
+    return whatsapp_guard.health(db, channel)
+
+
 @internal_router.get("/channels", dependencies=[Depends(_require_bridge)])
 def restorable_channels(db: Session = Depends(get_db)):
     channels = db.scalars(
@@ -253,6 +282,7 @@ def save_auth(channel_id: uuid.UUID, payload: WhatsAppInternalAuth, db: Session 
 @internal_router.delete("/channels/{channel_id}/auth", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(_require_bridge)])
 def clear_auth(channel_id: uuid.UUID, db: Session = Depends(get_db)):
     channel = _internal_channel(db, channel_id)
+    was_linked = channel.is_enabled and bool(channel.encrypted_auth_state)
     channel.encrypted_auth_state = None
     channel.encrypted_qr = None
     channel.phone_number = None
@@ -262,6 +292,8 @@ def clear_auth(channel_id: uuid.UUID, db: Session = Depends(get_db)):
     channel.is_enabled = False
     channel.updated_at = now_utc()
     db.commit()
+    if was_linked:
+        alerts.line_alert(channel.id, "logged_out")
 
 
 @internal_router.put("/channels/{channel_id}/status", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(_require_bridge)])
@@ -296,8 +328,20 @@ def update_status(channel_id: uuid.UUID, payload: WhatsAppInternalStatus, db: Se
         else:
             channel.last_connected_at = now_utc()
             channel.is_enabled = True
+            if channel.phone_number and channel.phone_number != channel.warmup_number:
+                # A number new to this line starts its own warm-up.
+                channel.warmup_number, channel.warmup_started_at = channel.phone_number, now_utc()
+                channel.guard_paused_until = channel.guard_pause_reason = None
     channel.updated_at = now_utc()
     db.commit()
+    # Risk signals for the ban shield, once the status itself is saved.
+    if payload.status == "reconnecting":
+        whatsapp_guard.record_signal(channel.id, "disconnect")
+    elif payload.status == "error" and "temporarily banned" in (payload.error or "").lower():
+        whatsapp_guard.record_signal(channel.id, "banned")
+        alerts.line_alert(channel.id, "banned", payload.error or "")
+    elif payload.status == "error" or channel.status == "error":
+        alerts.line_alert(channel.id, "error", channel.last_error or payload.error or "")
 
 
 @internal_router.post(

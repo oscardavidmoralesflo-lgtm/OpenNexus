@@ -476,7 +476,7 @@ async def reply_as_human(
         db.commit()
     quoted_id, quoted_external = resolve_quote(db, conversation, payload.quoted_message_id)
     external_message_id = await send_channel_message(
-        db, conversation, payload.content.strip(), quoted_external_id=quoted_external
+        db, conversation, payload.content.strip(), quoted_external_id=quoted_external, intent="operator",
     )
     db.add(
         Message(

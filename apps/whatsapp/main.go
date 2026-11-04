@@ -137,6 +137,7 @@ func healthcheck(port string) int {
 func main() {
 	check := flag.Bool("healthcheck", false, "probe the local /health endpoint and exit")
 	flag.Parse()
+	useBrowserIdentity()
 	loadDotEnv()
 
 	port := getenv("WHATSAPP_BRIDGE_PORT", "3101")

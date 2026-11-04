@@ -85,6 +85,7 @@ def test_both_outbound_channels_receive_valid_voice_media(tmp_path, monkeypatch,
     db = SimpleNamespace(
         get=lambda model, key: SimpleNamespace(encrypted_access_token="encrypted", phone_number_id="phone-id", coexistence=False),
         scalar=lambda query: now_utc(),
+        add=lambda row: None,  # the QR ban shield records each send
     )
     result = asyncio.run(whatsapp.send_channel_media(
         db, conversation, kind="audio", data=original, mime="audio/mp4", filename="voice-note.m4a", caption="Listen to this",

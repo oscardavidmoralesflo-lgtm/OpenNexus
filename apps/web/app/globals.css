@@ -3176,3 +3176,24 @@ textarea[data-overflow="true"]::-webkit-scrollbar-thumb { border-radius: 8px; ba
 .client-tabs { overflow-x: auto; scrollbar-width: none; }
 .client-tabs::-webkit-scrollbar { display: none; }
 .client-tabs button { flex: none; white-space: nowrap; padding: 0 12px; }
+
+/* Ban shield of a QR line */
+.ban-shield { display: flex; flex-direction: column; gap: 14px; }
+.ban-shield .wa-panel-head { margin-bottom: 0; }
+.ban-shield h2 { display: flex; align-items: center; gap: 8px; }
+.shield-level { font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 99px; }
+.shield-level.level-good { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+.shield-level.level-watch { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+.shield-level.level-paused { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+.shield-level.level-off { background: var(--surface-3); color: var(--muted); }
+.shield-paused { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--red) 30%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--red) 6%, transparent); }
+.shield-paused p { margin: 0; font-size: 13px; }
+.shield-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.shield-grid > div { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--surface-2); }
+.shield-grid small { color: var(--muted); font-size: 11px; }
+.shield-grid strong { font-size: 18px; }
+.shield-grid strong em { font-style: normal; font-size: 12px; color: var(--muted); font-weight: 600; }
+.shield-steps { display: flex; gap: 3px; }
+.shield-steps span { flex: 1; height: 5px; border-radius: 99px; background: var(--surface-3); }
+.shield-steps span.on { background: var(--green); }
+@media (max-width: 900px) { .shield-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
