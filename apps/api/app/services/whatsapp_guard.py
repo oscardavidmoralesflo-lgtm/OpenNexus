@@ -195,15 +195,21 @@ def record_signal(channel_id: uuid.UUID, kind: str, detail: str = "") -> None:
             pause = (PAUSE, "WhatsApp refused several messages in the last hour")
         elif kind == "disconnect" and _events(db, channel_id, ("disconnect",), now - timedelta(hours=1))[0] >= DISCONNECTS_PER_HOUR:
             pause = (PAUSE, "WhatsApp disconnected the number several times in the last hour")
+        newly_paused = None
         if pause and channel.guard_enabled:
             until = now + pause[0]
             if not channel.guard_paused_until or channel.guard_paused_until < until:
+                if not channel.guard_paused_until or channel.guard_paused_until <= now:
+                    newly_paused = pause[1]
                 channel.guard_paused_until, channel.guard_pause_reason = until, (pause[1] + (f": {detail}" if detail else ""))[:300]
         # Old events only matter for the counts above; keep the table small.
         db.execute(delete(WhatsAppSendEvent).where(WhatsAppSendEvent.channel_id == channel_id, WhatsAppSendEvent.created_at < now - KEEP))
         db.commit()
     finally:
         db.close()
+    if newly_paused and kind != "banned":  # a ban has its own alert
+        from .alerts import line_alert
+        line_alert(channel_id, "paused", newly_paused)
 
 
 def health(db: Session, channel: WhatsAppChannel) -> dict:

@@ -18,6 +18,10 @@ from .whatsapp_format import markdown_to_whatsapp
 
 async def bridge_command(method: str, path: str, payload: dict | None = None, timeout: float = 20) -> dict:
     settings = get_settings()
+    if method == "POST" and path.startswith("/channels/") and path.endswith("/disconnect"):
+        # The team unlinks this line: the logout that follows needs no alert.
+        from .alerts import expect_unlink
+        expect_unlink(path.split("/")[2])
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.request(

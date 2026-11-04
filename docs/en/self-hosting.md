@@ -41,6 +41,7 @@ front of it (see [Go to production](#go-to-production-https)). One instance =
 - [Manage your install](#manage-your-install)
 - [Persistent data](#persistent-data)
 - [Backups](#backups)
+- [Offsite backups and alerts](#offsite-backups-and-alerts)
 - [Upgrade](#upgrade)
 - [Uninstall](#uninstall)
 - [Run without Docker](#run-without-docker)
@@ -380,6 +381,30 @@ volume files before accepting traffic. The
 `ENCRYPTION_KEY` must be the original value; replacing it does not repair encrypted
 credentials. Rehearse the procedure with harmless files in a disposable local
 installation before using it for an actual recovery.
+
+## Offsite backups and alerts
+
+`scripts/ops/` holds two scripts for the server, run from the repository directory by cron. They read `.env.docker` for SMTP and ports. They read their own settings from `.env.ops`, which is gitignored: copy `scripts/ops/env.ops.example` and run `chmod 600 .env.ops`.
+
+- **`offsite-backup.sh`**: dumps the database while the stack keeps running, adds `.env.docker` (it holds the `ENCRYPTION_KEY` the dump needs), encrypts both with `BACKUP_PASSPHRASE`, and uploads the result to a Backblaze B2 bucket. Copies older than `BACKUP_KEEP_DAYS` (30) are deleted. rclone runs from its Docker image. A failed run e-mails `ALERT_EMAIL`.
+- **`check-health.sh`**: checks the API, the web gateway and the database. It e-mails `ALERT_EMAIL` once when one of them fails two runs in a row, and once when it recovers.
+
+```cron
+30 4 * * *   cd /opt/opennexus/app && scripts/ops/offsite-backup.sh >> backups/offsite.log 2>&1
+*/5 * * * *  cd /opt/opennexus/app && scripts/ops/check-health.sh >> backups/health.log 2>&1
+```
+
+Use a B2 application key limited to the backup bucket. Keep `BACKUP_PASSPHRASE` in a password manager: without it no backup can be opened.
+
+To restore, download an archive from the bucket, then open it:
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in agentaria-<stamp>.tar.enc | tar -xf -
+```
+
+The archive holds `opennexus.dump`, `env.docker` and `revision`. Restore the dump as in [Restore to an explicit target](#restore-to-an-explicit-target), with the `ENCRYPTION_KEY` from `env.docker`.
+
+The app also sends its own alerts. Set `ALERT_EMAIL` in `.env.docker` (or leave it empty to alert the agency's owners) and the `SMTP_*` settings. It then e-mails when a WhatsApp QR line goes into error, is unlinked from the phone (not by the team), is temporarily banned, or is paused by the ban shield. Each alert is sent at most once an hour per line. `ALERT_LANGUAGE` is `es` (default) or `en`.
 
 ## Upgrade
 

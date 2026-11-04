@@ -41,6 +41,7 @@ instancia = **una agencia** (el primer usuario registrado es su administrador).
 - [Gestionar tu instalación](#gestionar-tu-instalación)
 - [Datos persistentes](#datos-persistentes)
 - [Copias de seguridad](#copias-de-seguridad)
+- [Respaldos fuera del servidor y alertas](#respaldos-fuera-del-servidor-y-alertas)
 - [Actualizar](#actualizar)
 - [Desinstalar](#desinstalar)
 - [Correr sin Docker](#correr-sin-docker)
@@ -297,6 +298,30 @@ docker compose --env-file .env.docker exec -T db \
   sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < backups/opennexus.dump
 docker compose --env-file .env.docker start api whatsapp
 ```
+
+## Respaldos fuera del servidor y alertas
+
+`scripts/ops/` tiene dos scripts para el servidor, que cron corre desde el directorio del repositorio. Leen `.env.docker` para el SMTP y los puertos. Sus propios ajustes los leen de `.env.ops`, que está en el gitignore: copia `scripts/ops/env.ops.example` y corre `chmod 600 .env.ops`.
+
+- **`offsite-backup.sh`**: hace un volcado de la base de datos sin detener el sistema, le suma `.env.docker` (guarda la `ENCRYPTION_KEY` que el volcado necesita), cifra ambos con `BACKUP_PASSPHRASE` y sube el resultado a un bucket de Backblaze B2. Las copias de más de `BACKUP_KEEP_DAYS` (30) se borran. rclone corre desde su imagen de Docker. Si falla, envía un correo a `ALERT_EMAIL`.
+- **`check-health.sh`**: revisa la API, el gateway web y la base de datos. Envía un correo a `ALERT_EMAIL` una vez cuando una falla dos revisiones seguidas, y otra cuando se recupera.
+
+```cron
+30 4 * * *   cd /opt/opennexus/app && scripts/ops/offsite-backup.sh >> backups/offsite.log 2>&1
+*/5 * * * *  cd /opt/opennexus/app && scripts/ops/check-health.sh >> backups/health.log 2>&1
+```
+
+Usa una clave de aplicación de B2 limitada al bucket de respaldos. Guarda `BACKUP_PASSPHRASE` en un gestor de contraseñas: sin ella no se puede abrir ningún respaldo.
+
+Para restaurar, descarga un archivo del bucket y ábrelo:
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in agentaria-<fecha>.tar.enc | tar -xf -
+```
+
+El archivo trae `opennexus.dump`, `env.docker` y `revision`. Restaura el volcado como en la sección anterior, con la `ENCRYPTION_KEY` de `env.docker`.
+
+La app también envía sus propias alertas. Pon `ALERT_EMAIL` en `.env.docker` (o déjalo vacío para avisar a los dueños de la agencia) y los ajustes `SMTP_*`. Así envía un correo cuando una línea de WhatsApp por QR entra en error, se desvincula del teléfono (sin que lo haga el equipo), recibe un baneo temporal o el escudo anti-baneo la pausa. Cada alerta sale máximo una vez por hora por línea. `ALERT_LANGUAGE` es `es` (por defecto) o `en`.
 
 ## Actualizar
 

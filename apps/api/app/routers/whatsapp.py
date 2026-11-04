@@ -26,7 +26,7 @@ from ..schemas import (
     WhatsAppOutgoing,
 )
 from ..security import decrypt_secret, encrypt_secret
-from ..services import whatsapp_guard
+from ..services import alerts, whatsapp_guard
 from ..services.whatsapp import bridge_command
 from ..services.whatsapp_inbound import InboundMessage, process_inbound, send_reply_attachments
 
@@ -282,6 +282,7 @@ def save_auth(channel_id: uuid.UUID, payload: WhatsAppInternalAuth, db: Session 
 @internal_router.delete("/channels/{channel_id}/auth", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(_require_bridge)])
 def clear_auth(channel_id: uuid.UUID, db: Session = Depends(get_db)):
     channel = _internal_channel(db, channel_id)
+    was_linked = channel.is_enabled and bool(channel.encrypted_auth_state)
     channel.encrypted_auth_state = None
     channel.encrypted_qr = None
     channel.phone_number = None
@@ -291,6 +292,8 @@ def clear_auth(channel_id: uuid.UUID, db: Session = Depends(get_db)):
     channel.is_enabled = False
     channel.updated_at = now_utc()
     db.commit()
+    if was_linked:
+        alerts.line_alert(channel.id, "logged_out")
 
 
 @internal_router.put("/channels/{channel_id}/status", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(_require_bridge)])
@@ -336,6 +339,9 @@ def update_status(channel_id: uuid.UUID, payload: WhatsAppInternalStatus, db: Se
         whatsapp_guard.record_signal(channel.id, "disconnect")
     elif payload.status == "error" and "temporarily banned" in (payload.error or "").lower():
         whatsapp_guard.record_signal(channel.id, "banned")
+        alerts.line_alert(channel.id, "banned", payload.error or "")
+    elif payload.status == "error" or channel.status == "error":
+        alerts.line_alert(channel.id, "error", channel.last_error or payload.error or "")
 
 
 @internal_router.post(
