@@ -7,8 +7,8 @@ from ..deps import get_current_user
 from ..models import ProviderCredential, User
 from ..schemas import ProviderKeyToggle, ProviderKeyUpdate, ProviderOut
 from ..security import decrypt_secret, encrypt_secret, mask_secret
-from ..services.ai import test_provider
-from ..services.providers import PROVIDERS, SUPPORTED, base_url_for, credential_source
+from ..services.ai import provider_models, test_provider
+from ..services.providers import PROVIDERS, SUPPORTED, base_url_for, credential_source, resolve_provider_credentials
 
 
 router = APIRouter(prefix="/providers", tags=["AI providers"])
@@ -104,3 +104,12 @@ async def validate_provider_key(provider: str, payload: ProviderKeyUpdate, user:
     """Verify a raw key against the provider before it is stored."""
     _require_provider(provider)
     return await test_provider(provider, base_url_for(provider), payload.api_key)
+
+
+@router.get("/{provider}/models")
+async def list_provider_models(provider: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    _require_provider(provider)
+    credentials = resolve_provider_credentials(db, user.agency_id, provider)
+    if credentials is None:
+        raise HTTPException(status_code=409, detail="Configure an active API key for this provider first")
+    return {"models": await provider_models(provider, *credentials)}

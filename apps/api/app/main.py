@@ -2,27 +2,41 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import new_session
 from .services.conversation_state import resolve_idle_ai_conversations
+from .services.audit import AuditTrailMiddleware
+from .services.team_roles import enforce as enforce_role_policy
 from .routers import (
+    account,
     agency,
+    agent_tests,
+    booking,
+    campaigns,
+    pipeline,
     agent_tools,
     agents,
+    audit,
     auth,
+    client_report,
+    billing,
     catalog,
     clients,
     conversations,
     dashboard,
     domains,
     industries,
+    integrations,
+    mcp,
     mobile,
+    phone,
     portal,
     providers,
     reports,
+    sandbox,
     whatsapp,
     whatsapp_cloud,
     template_webhooks,
@@ -31,11 +45,17 @@ from .routers import (
     webchat,
     social,
     social_webhook,
+    team,
 )
 
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+if settings.billing_enabled:
+    # Plans and AI credit plug into the credential and usage seams.
+    from .services.billing import install as install_billing
+    install_billing()
 
 AUTO_RESOLVE_SWEEP_SECONDS = 15 * 60
 
@@ -54,8 +74,13 @@ async def _auto_resolve_loop() -> None:
 
 
 async def _follow_up_loop() -> None:
-    """Send due follow-ups and apply pending resolutions on a timer."""
+    """Send due follow-ups and apply pending resolutions on a timer. Phone
+    calls whose end-of-call report never arrived are finished on the same
+    timer."""
+    from .services.booking import send_due_reminders
+    from .services.campaigns import run_due_campaigns
     from .services.follow_ups import run_due
+    from .services.phone_calls import reconcile_calls
 
     while True:
         await asyncio.sleep(max(5.0, get_settings().follow_up_sweep_seconds))
@@ -64,6 +89,21 @@ async def _follow_up_loop() -> None:
                 await run_due(db)
         except Exception:  # noqa: BLE001 - a failed sweep must not stop the next one
             logger.exception("Follow-up sweep failed")
+        try:
+            with new_session() as db:
+                await run_due_campaigns(db)
+        except Exception:  # noqa: BLE001
+            logger.exception("Campaign sweep failed")
+        try:
+            with new_session() as db:
+                await send_due_reminders(db)
+        except Exception:  # noqa: BLE001
+            logger.exception("Appointment reminder sweep failed")
+        try:
+            with new_session() as db:
+                await reconcile_calls(db)
+        except Exception:  # noqa: BLE001
+            logger.exception("Phone call reconciliation failed")
 
 
 @asynccontextmanager
@@ -82,11 +122,15 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="OpenNexus API",
+    title="Agentaria API",
     description="API to manage agencies, clients and AI agents.",
     version="0.3.0",
     lifespan=lifespan,
+    # Roles and the agency's two-step policy apply to every dashboard route.
+    dependencies=[Depends(enforce_role_policy)],
 )
+# Every successful dashboard write lands in the agency's audit log.
+app.add_middleware(AuditTrailMiddleware)
 app.add_middleware(
     CORSMiddleware,
     # The configured frontend origin (a real domain in production) plus any
@@ -105,17 +149,25 @@ def health():
 
 
 app.include_router(auth.router, prefix="/api")
+app.include_router(team.public_router, prefix="/api")
+app.include_router(team.router, prefix="/api")
+app.include_router(audit.router, prefix="/api")
+app.include_router(account.router, prefix="/api")
 app.include_router(agency.router, prefix="/api")
 app.include_router(clients.router, prefix="/api")
 app.include_router(industries.router, prefix="/api")
 app.include_router(agents.router, prefix="/api")
 app.include_router(webchat.router, prefix="/api")
 app.include_router(agent_tools.router, prefix="/api")
+app.include_router(integrations.router, prefix="/api")
 app.include_router(providers.router, prefix="/api")
 app.include_router(catalog.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
+app.include_router(sandbox.router, prefix="/api")
+app.include_router(billing.router, prefix="/api")
+app.include_router(billing.public_router, prefix="/api")
 app.include_router(mobile.router, prefix="/api")
 app.include_router(portal.router, prefix="/api")
 app.include_router(whatsapp.router, prefix="/api")
@@ -126,5 +178,14 @@ app.include_router(template_webhooks.router, prefix="/api")
 app.include_router(template_webhooks.public_router, prefix="/api")
 app.include_router(widget.router, prefix="/api")
 app.include_router(domains.public_router, prefix="/api")
+app.include_router(mcp.public_router, prefix="/api")
+app.include_router(mcp.router, prefix="/api")
 app.include_router(social.router, prefix="/api")
 app.include_router(social_webhook.public_router, prefix="/api")
+app.include_router(phone.router, prefix="/api")
+app.include_router(phone.public_router, prefix="/api")
+app.include_router(agent_tests.router, prefix="/api")
+app.include_router(client_report.router, prefix="/api")
+app.include_router(booking.router, prefix="/api")
+app.include_router(campaigns.router, prefix="/api")
+app.include_router(pipeline.router, prefix="/api")

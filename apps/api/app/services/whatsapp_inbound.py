@@ -8,6 +8,7 @@ taken over. The caller is responsible for actually delivering the reply.
 
 import asyncio
 import random
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -27,9 +28,11 @@ from .notifications import notify_needs_human
 from .routing import route_new_conversation_by_tags
 from .model_catalog import DEFAULT_AUDIO_MODEL
 from .availability import on_duty
-from .providers import DEFAULT_PROVIDER, resolve_agent_credentials, resolve_provider_credentials
+from .providers import DEFAULT_PROVIDER, resolve_agent_credentials, resolve_model_credentials
 from .tools import run_completion
 from .usage import record_usage, schedule_generation_reconcile
+from .booking import BookingChanges, apply_bookings, build_booking_specs
+from .pipeline import StageChanges, apply_stage, build_stage_spec
 from .capture import apply_captures, build_capture_spec, capture_context, field_definitions
 from .escalation import (
     active_rules as escalation_active_rules,
@@ -40,9 +43,11 @@ from .escalation import (
 )
 from .follow_ups import after_agent_reply
 from .resolution import build_resolution_spec, resolution_prompt
+from .media_library import build_media_spec, media_prompt
 from .whatsapp import deliver_reaction, send_channel_media, send_channel_message, signal_channel_read
 from .whatsapp_format import parse_reply_directives
 from .whatsapp_identity import resolve_peer_contact
+from . import humanize, sandbox
 
 
 @dataclass
@@ -110,26 +115,26 @@ async def resolve_inbound_content(
     enabled = (inbound.media_kind == "image" and agent.image_enabled) or (
         inbound.media_kind == "audio" and agent.audio_enabled
     )
-    credentials = resolve_provider_credentials(db, agent.agency_id, DEFAULT_PROVIDER)
+    requested_model = (agent.image_model.strip() or agent.model.strip()) if inbound.media_kind == "image" else (agent.audio_model.strip() or DEFAULT_AUDIO_MODEL)
+    preferred = agent.provider if inbound.media_kind == "image" and not agent.image_model.strip() else DEFAULT_PROVIDER
+    credentials = resolve_model_credentials(db, agent.agency_id, requested_model, preferred=preferred)
     if not enabled or not credentials:
         return text, text or _media_placeholder(inbound.media_kind)
     try:
         data = inbound.media_bytes
-        base_url, api_key = credentials
+        media_provider, base_url, api_key, model = credentials
         if inbound.media_kind == "image":
-            model = agent.image_model.strip() or agent.model.strip()
             instruction = (
                 "Describe con detalle el contenido de esta imagen para que un asistente pueda responder al cliente."
                 + (f" El cliente escribió: {text}" if text else "")
             )
             described = await describe_image(base_url, api_key, model, data, inbound.media_mime or "image/jpeg", instruction)
-            record = record_usage(db, agent.agency_id, agent.id, DEFAULT_PROVIDER, model, described, conversation=conversation, message=message)
+            record = record_usage(db, agent.agency_id, agent.id, media_provider, model, described, conversation=conversation, message=message)
             schedule_generation_reconcile(record, described, base_url, api_key)
             return text, (f"{text}\n\n" if text else "") + f"[Imagen recibida] {described.text}"
-        model = agent.audio_model.strip() or DEFAULT_AUDIO_MODEL
         mime = inbound.media_mime or "audio/ogg"
         transcribed = await transcribe_audio(base_url, api_key, model, data, audio_filename(mime), mime)
-        record = record_usage(db, agent.agency_id, agent.id, DEFAULT_PROVIDER, model, transcribed, conversation=conversation, message=message)
+        record = record_usage(db, agent.agency_id, agent.id, media_provider, model, transcribed, conversation=conversation, message=message)
         schedule_generation_reconcile(record, transcribed, base_url, api_key)
         return text, (f"{text}\n\n" if text else "") + (transcribed.text or _media_placeholder("audio"))
     except (HTTPException, ValueError):
@@ -250,7 +255,7 @@ async def process_inbound(
         **({"created_at": inbound.occurred_at} if inbound.occurred_at else {}),
     )
     display_content, llm_content = await resolve_inbound_content(
-        db, channel.agent, inbound, conversation=conversation, message=visitor_message
+        db, sandbox.agent_for(channel, conversation), inbound, conversation=conversation, message=visitor_message
     )
     visitor_message.content = display_content
     visitor_message.llm_content = llm_content if llm_content != display_content else None
@@ -299,7 +304,15 @@ async def process_inbound(
         await notify_needs_human(db, conversation, display_content or llm_content)
         return InboundResult(accepted=True, conversation_id=conversation.id, mode="human")
 
-    delay = reply_delay_seconds(channel.agent)
+    if conversation_channel in ("whatsapp", "whatsapp_cloud") and channel.client is not None and channel.client.is_sandbox:
+        # On the sandbox number a code picks the agent; until one does, the
+        # sandbox answers by itself and no AI credit is spent.
+        handled = sandbox.route(db, channel, conversation, inbound.text or "")
+        if handled is not None:
+            return handled
+        db.refresh(conversation)
+
+    delay = reply_delay_seconds(sandbox.agent_for(channel, conversation))
     if delay > 0:
         schedule_debounced_reply(conversation.id, delay)
         return InboundResult(accepted=True, conversation_id=conversation.id, mode="ai")
@@ -385,8 +398,8 @@ async def _reply_with_ai(db: Session, channel, conversation: Conversation, retri
     ``retrieval_query`` drives knowledge retrieval: the triggering message's
     text on the synchronous path, or the whole visitor burst when debounced.
     """
-    agent = channel.agent
     db.refresh(conversation)
+    agent = sandbox.agent_for(channel, conversation)
     if conversation.mode == "human" or conversation.status == "resolved" or not channel.is_enabled:
         return InboundResult(accepted=True, conversation_id=conversation.id, mode=conversation.mode)
     if conversation.channel == "whatsapp_cloud" and channel.coexistence:
@@ -443,6 +456,12 @@ async def _reply_with_ai(db: Session, channel, conversation: Conversation, retri
     capture_holder: list = []
     if conversation.channel in ("whatsapp", "whatsapp_cloud"):
         system_content += "\n\n" + _gesture_rules(burst)
+        if agent.split_replies:
+            system_content += "\n\n" + (SPLIT_HINT_EN if agent.prompt_language == "en" else SPLIT_HINT_ES)
+    if agent.style_mirror:
+        mirror = humanize.style_mirror_prompt([llm_text(m) for m in history if m.role == "user"][-8:], agent.prompt_language)
+        if mirror:
+            system_content += "\n\n" + mirror
     if conversation.channel in ("whatsapp", "whatsapp_cloud", "instagram", "messenger"):
         rules = escalation_active_rules(db, agent)
         if escalation_enabled(db, agent, rules):
@@ -458,8 +477,22 @@ async def _reply_with_ai(db: Session, channel, conversation: Conversation, retri
     resolution_spec = build_resolution_spec(resolution_holder) if agent.resolve_enabled else None
     if resolution_spec:
         system_content += "\n\n" + resolution_prompt(agent)
+    # The files the business lets the agent send, when it has any.
+    media_spec = build_media_spec(db, agent)
+    if media_spec:
+        system_content += "\n\n" + media_prompt(agent)
+    # The client's appointment book, when it is on.
+    booking_changes = BookingChanges()
+    booking_specs, booking_rules = build_booking_specs(db, agent, conversation, booking_changes)
+    if booking_rules:
+        system_content += "\n\n" + booking_rules
+    stage_changes = StageChanges()
+    stage_spec, stage_rules = build_stage_spec(db, agent, conversation, stage_changes)
+    if stage_rules:
+        system_content += "\n\n" + stage_rules
     extra_specs = [
         *(escalation_specs or []), *([capture_spec] if capture_spec else []), *([resolution_spec] if resolution_spec else []),
+        *([media_spec] if media_spec else []), *booking_specs, *([stage_spec] if stage_spec else []),
     ] or None
     messages = [
         {"role": "system", "content": system_content},
@@ -557,6 +590,8 @@ async def _reply_with_ai(db: Session, channel, conversation: Conversation, retri
     conversation.updated_at = now_utc()
     channel.last_error = None
     apply_captures(db, conversation, capture_holder, definitions)
+    apply_bookings(db, agent, conversation, booking_changes)
+    apply_stage(db, conversation, stage_changes)
     if escalation_holder and conversation.channel in ("instagram", "messenger"):
         request = escalation_holder[-1]
         conversation.social_pending_escalation = {
@@ -674,7 +709,7 @@ async def _debounced_reply(conversation_id: uuid.UUID, delay: float) -> None:
         history = db.scalars(
             exchanged_only(select(Message).where(Message.conversation_id == conversation_id))
             .order_by(Message.created_at.desc())
-            .limit(channel.agent.memory_limit)
+            .limit(sandbox.agent_for(channel, conversation).memory_limit)
         ).all()
         burst: list[str] = []
         burst_external_ids: list[str] = []
@@ -684,8 +719,15 @@ async def _debounced_reply(conversation_id: uuid.UUID, delay: float) -> None:
             burst.append(llm_text(item))
             if item.external_message_id:
                 burst_external_ids.append(item.external_message_id)
+        burst_messages = []
+        for item in history:
+            if item.role != "user":
+                break
+            burst_messages.append(item)
+        read_ids = list(reversed(burst_external_ids))
         # The loop walks newest-first; read receipts go oldest-first.
-        await _signal_read_and_typing(db, conversation, list(reversed(burst_external_ids)))
+        await _signal_read_and_typing(db, conversation, read_ids)
+        typing_since = time.monotonic()
         try:
             result = await _reply_with_ai(db, channel, conversation, "\n".join(reversed(burst)), expected_last_message_id=last.id)
         except Exception as exc:
@@ -698,19 +740,90 @@ async def _debounced_reply(conversation_id: uuid.UUID, delay: float) -> None:
             await send_reply_attachments(db, conversation, result.attachment_message_ids)
             return
         try:
-            external_id = await send_channel_message(
-                db, conversation, result.reply, quoted_external_id=result.quote_external_id
-            )
+            await _deliver_humanized(db, channel, conversation, result, read_ids, burst_messages, typing_since)
         except HTTPException as exc:
             channel.last_error = f"The reply could not be sent: {exc.detail}"
             channel.updated_at = now_utc()
             db.commit()
             return
-        if external_id and result.outbound_message_id:
-            outbound = db.get(Message, result.outbound_message_id)
-            if outbound:
-                outbound.external_message_id = external_id
-                db.commit()
         await send_reply_attachments(db, conversation, result.attachment_message_ids)
     finally:
         db.close()
+
+
+# Asked of the model when the agent splits replies, so its answer comes in
+# pieces a person would send (kept in the customer's language, like the rest
+# of the LLM-facing rules).
+SPLIT_HINT_ES = (
+    "FORMATO DE WHATSAPP: escribe como una persona en un chat. Frases cortas y naturales; "
+    "si tu respuesta tiene ideas distintas, sepáralas con una línea en blanco (cada bloque se envía como un mensaje)."
+)
+SPLIT_HINT_EN = (
+    "WHATSAPP FORMAT: write like a person in a chat. Short, natural sentences; "
+    "if your answer has separate ideas, separate them with a blank line (each block is sent as its own message)."
+)
+
+
+async def _deliver_humanized(db: Session, channel, conversation: Conversation, result: InboundResult,
+                             read_ids: list[str], burst: list[Message], typing_since: float) -> None:
+    """Send the stored reply the way the agent is set to: as a voice note, as a
+    few short messages with "typing…" in between, or as one message.
+
+    The reply was stored as one message; when it goes out in parts, that
+    message keeps the first part and each further part is stored as its own,
+    so the inbox shows exactly what the customer received."""
+    agent = sandbox.agent_for(channel, conversation)
+    outbound = db.get(Message, result.outbound_message_id) if result.outbound_message_id else None
+
+    if outbound is not None and humanize.wants_voice(agent, burst):
+        spoken = humanize.speakable(result.reply)
+        voice_model = (agent.voice_model or humanize.DEFAULT_VOICE_MODEL).strip()
+        resolved_voice = resolve_model_credentials(db, agent.agency_id, voice_model)
+        credentials = (resolved_voice[1], resolved_voice[2]) if resolved_voice else None
+        if spoken and credentials:
+            try:
+                audio, mime, usage = await humanize.synthesize(*credentials, resolved_voice[3], agent.voice_note_voice, spoken)
+            except Exception:  # noqa: BLE001 - a voice that fails falls back to text
+                audio = None
+            if audio:
+                await signal_channel_read(db, conversation, read_ids, typing=True)
+                await asyncio.sleep(max(0.0, humanize.typing_seconds(spoken, agent.typing_speed_cps) / 2 - (time.monotonic() - typing_since)))
+                external_id = await send_channel_media(db, conversation, kind="audio", data=audio, mime=mime, filename="voice-note.ogg")
+                store_attachment(db, outbound, data=audio, mime=mime, kind="audio")
+                outbound.external_message_id = external_id
+                record = record_usage(db, agent.agency_id, agent.id, resolved_voice[0],
+                                      resolved_voice[3], usage,
+                                      conversation=conversation, purpose="voice")
+                db.commit()
+                schedule_generation_reconcile(record, usage, *credentials)
+                return
+
+    humanized = agent.split_replies or agent.typing_speed_cps > 0
+    parts = humanize.split_reply(result.reply, agent.split_max_parts) if agent.split_replies else [result.reply]
+    for index, part in enumerate(parts):
+        if index == 0:
+            if humanized:
+                # "Typing…" has been on since generation began; top it up to a
+                # person's pace for this first message.
+                await asyncio.sleep(max(0.0, humanize.typing_seconds(part, agent.typing_speed_cps) - (time.monotonic() - typing_since)))
+            message = outbound
+            if message is not None and len(parts) > 1:
+                message.content = part
+        else:
+            await signal_channel_read(db, conversation, read_ids, typing=True)
+            await asyncio.sleep(humanize.typing_seconds(part, agent.typing_speed_cps))
+            # Checked after the pause, right before sending: a person may have
+            # taken over (or the case closed) while "typing…" was showing.
+            db.expire_all()
+            db.refresh(conversation)
+            if conversation.mode == "human" or conversation.status == "resolved":
+                break
+            message = Message(conversation_id=conversation.id, role="assistant", content=part,
+                              sender_type="ai", sender_name=agent.name)
+            db.add(message)
+        external_id = await send_channel_message(
+            db, conversation, part, quoted_external_id=result.quote_external_id if index == 0 else None
+        )
+        if message is not None and external_id:
+            message.external_message_id = external_id
+        db.commit()

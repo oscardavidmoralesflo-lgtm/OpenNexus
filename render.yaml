@@ -1,0 +1,118 @@
+# Render Blueprint: the full OpenNexus stack on Render.
+#
+#   opennexus          public gateway (Caddy): "/api/*" -> API, the rest -> web
+#   opennexus-api      FastAPI, migrations run on start (private)
+#   opennexus-web      Next.js dashboard and portals (private)
+#   opennexus-whatsapp WhatsApp bridge, sessions stored in Postgres (private)
+#   opennexus-db       PostgreSQL
+#
+# After the first deploy, set FRONTEND_URL in the "opennexus-config" group to
+# the gateway's URL (or your custom domain), then sign in once with the
+# SETUP_TOKEN shown in the "opennexus-secrets" group. See docs/en/deploy-render.md.
+
+envVarGroups:
+  - name: opennexus-secrets
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: WHATSAPP_BRIDGE_TOKEN
+        generateValue: true
+      - key: SETUP_TOKEN
+        generateValue: true
+  - name: opennexus-config
+    envVars:
+      - key: FRONTEND_URL
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: lax
+
+services:
+  - type: web
+    name: opennexus
+    runtime: docker
+    region: virginia
+    plan: starter
+    dockerContext: ./docker/render
+    dockerfilePath: ./docker/render/Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: API_HOSTPORT
+        fromService:
+          type: pserv
+          name: opennexus-api
+          property: hostport
+      - key: WEB_HOSTPORT
+        fromService:
+          type: pserv
+          name: opennexus-web
+          property: hostport
+
+  - type: pserv
+    name: opennexus-api
+    runtime: docker
+    region: virginia
+    plan: starter
+    dockerContext: ./apps/api
+    dockerfilePath: ./apps/api/Dockerfile
+    envVars:
+      - fromGroup: opennexus-secrets
+      - fromGroup: opennexus-config
+      - key: DATABASE_URL
+        fromDatabase:
+          name: opennexus-db
+          property: connectionString
+      - key: WHATSAPP_BRIDGE_URL
+        fromService:
+          type: pserv
+          name: opennexus-whatsapp
+          property: hostport
+      - key: BACKEND_URL
+        value: http://localhost:8000
+      - key: BILLING_ENABLED
+        value: "false"
+
+  - type: pserv
+    name: opennexus-web
+    runtime: docker
+    region: virginia
+    plan: starter
+    dockerContext: ./apps/web
+    dockerfilePath: ./apps/web/Dockerfile
+    envVars:
+      - key: BACKEND_INTERNAL_URL
+        fromService:
+          type: pserv
+          name: opennexus-api
+          property: hostport
+
+  - type: pserv
+    name: opennexus-whatsapp
+    runtime: docker
+    region: virginia
+    plan: starter
+    dockerContext: ./apps/whatsapp
+    dockerfilePath: ./apps/whatsapp/Dockerfile
+    envVars:
+      - fromGroup: opennexus-secrets
+      - key: WHATSAPP_STORE_URL
+        fromDatabase:
+          name: opennexus-db
+          property: connectionString
+      - key: WHATSAPP_STORE_SCHEMA
+        value: whatsmeow
+      - key: BACKEND_URL
+        fromService:
+          type: pserv
+          name: opennexus-api
+          property: hostport
+
+databases:
+  - name: opennexus-db
+    databaseName: opennexus
+    region: virginia
+    plan: basic-256mb
+    ipAllowList: []

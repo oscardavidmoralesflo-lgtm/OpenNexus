@@ -33,3 +33,7 @@ Both need an agency session and only ever see that agency's rows.
 
 - [AI providers](ai-providers.md) — where the cost of each reply comes from.
 - [Agents](agents.md) — pick the model each agent answers with.
+
+## Monthly client report
+
+**Monthly report** on a client's page opens a one-page report of a month (the last full month by default) to print or save as a PDF and send to the client: conversations and the change from the month before, the share resolved by AI with no person, the median first reply, new contacts, conversations your team took over, conversations per day and per channel, and messages received and answered. **Time saved** is an estimate of 2 minutes per AI reply, stated on the report. The AI cost row appears only when you tick **Show AI cost**. Playground rehearsals and quality tests are left out. API: `GET /api/clients/{id}/monthly-report?month=YYYY-MM`.

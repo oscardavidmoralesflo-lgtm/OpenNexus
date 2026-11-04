@@ -1,10 +1,7 @@
-"""The AI provider: OpenRouter, bring your own key, one per agency.
+"""Agency-scoped credentials for routers and direct AI providers.
 
-OpenRouter fronts every vendor (OpenAI, Anthropic, Google, ...) behind one
-OpenAI-compatible API, so an agency configures a single key and picks any
-model by its OpenRouter slug (``openai/gpt-6-luna``, ``anthropic/claude-sonnet-5``).
-The registry keeps its dict shape so a deployment can still swap the base URL
-or resolve credentials differently without touching the call sites.
+Endpoints are fixed here: credentials are never sent to a user-supplied host.
+Chat models use each provider's own model IDs, not OpenRouter aliases.
 """
 
 from collections.abc import Callable
@@ -30,9 +27,36 @@ CredentialSource = Literal["agency", "deployment", "none"]
 
 PROVIDERS: dict[str, dict[str, str]] = {
     "openrouter": {"label": "OpenRouter", "base_url": "https://openrouter.ai/api/v1"},
+    "openai": {"label": "OpenAI", "base_url": "https://api.openai.com/v1"},
+    "anthropic": {"label": "Anthropic (Claude)", "base_url": "https://api.anthropic.com/v1"},
+    "google": {"label": "Google Gemini", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai"},
+    "deepseek": {"label": "DeepSeek", "base_url": "https://api.deepseek.com/v1"},
+    "groq": {"label": "Groq", "base_url": "https://api.groq.com/openai/v1"},
+    "xai": {"label": "xAI (Grok)", "base_url": "https://api.x.ai/v1"},
+    "mistral": {"label": "Mistral AI", "base_url": "https://api.mistral.ai/v1"},
+    "together": {"label": "Together AI", "base_url": "https://api.together.ai/v1"},
+    "fireworks": {"label": "Fireworks AI", "base_url": "https://api.fireworks.ai/inference/v1"},
+    "cerebras": {"label": "Cerebras", "base_url": "https://api.cerebras.ai/v1"},
 }
 SUPPORTED = tuple(PROVIDERS)
 DEFAULT_PROVIDER = "openrouter"
+PROVIDER_PATTERN = "^(" + "|".join(SUPPORTED) + ")$"
+MODEL_VENDORS = {"openai": "openai", "anthropic": "anthropic", "google": "google", "deepseek": "deepseek", "x-ai": "xai", "mistralai": "mistral"}
+
+# Picker seeds; authenticated discovery supplies the models the key can use.
+# These are model IDs, never a price table or a claim of account access.
+CHAT_MODELS: dict[str, tuple[str, ...]] = {
+    "openai": ("gpt-4.1-mini", "gpt-4.1", "gpt-4.1-nano"),
+    "anthropic": ("claude-sonnet-4-6", "claude-opus-5-5", "claude-haiku-4-5"),
+    "google": ("gemini-3.8-flash", "gemini-3.1-flash-lite"),
+    "deepseek": ("deepseek-flash", "deepseek-v4-pro"),
+    "groq": ("openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"),
+    "xai": ("grok-4.7",),
+    "mistral": ("mistral-small-latest", "mistral-medium-latest", "mistral-large-latest"),
+    "together": ("MiniMaxAI/MiniMax-M3", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
+    "fireworks": ("accounts/fireworks/models/llama-v3p3-70b-instruct",),
+    "cerebras": ("zai-glm-4.7", "gpt-oss-120b"),
+}
 
 
 def base_url_for(provider: str) -> str:
@@ -98,3 +122,43 @@ def resolve_provider_credentials(db: Session, agency_id, provider: str) -> tuple
 def resolve_agent_credentials(db: Session, agent: Agent) -> tuple[str, str] | None:
     """(base_url, api_key) for the agent's provider using the agency's stored key."""
     return resolve_provider_credentials(db, agent.agency_id, agent.provider)
+
+
+def resolve_model_credentials(db: Session, agency_id, model: str, *, preferred: str = DEFAULT_PROVIDER) -> tuple[str, str, str, str] | None:
+    """Resolve a capability model to (provider, base_url, key, upstream_model).
+
+Keep existing routed capability models working. When no router key is
+available, a matching direct vendor key can serve the same model. Never send
+a vendor's key to another provider. Bare IDs belong to the selected provider.
+"""
+    model = model.strip()
+    vendor, separator, native = model.partition("/")
+    # A direct provider can itself use namespaced IDs (Together, Groq, Fireworks).
+    if preferred != DEFAULT_PROVIDER:
+        credentials = resolve_provider_credentials(db, agency_id, preferred)
+        return (preferred, *credentials, model) if credentials else None
+    if separator:
+        credentials = resolve_provider_credentials(db, agency_id, DEFAULT_PROVIDER)
+        if credentials:
+            return (DEFAULT_PROVIDER, *credentials, model)
+        direct = MODEL_VENDORS.get(vendor)
+        credentials = resolve_provider_credentials(db, agency_id, direct) if direct else None
+        return (direct, *credentials, native) if credentials else None
+    credentials = resolve_provider_credentials(db, agency_id, preferred)
+    return (preferred, *credentials, model) if credentials else None
+
+
+def model_disclosure_provider(db: Session, agency_id, model: str, *, preferred: str = DEFAULT_PROVIDER) -> str:
+    """The capability destination without reading or decrypting any secret.
+
+A deployment fallback is conservatively disclosed as routing through its
+registered provider. Unconfigured capabilities retain their intended router.
+"""
+    if preferred != DEFAULT_PROVIDER:
+        return preferred
+    direct = MODEL_VENDORS.get(model.partition("/")[0])
+    if _in_use(db, agency_id, DEFAULT_PROVIDER) or _credential_fallback is not None:
+        return DEFAULT_PROVIDER
+    if direct and _in_use(db, agency_id, direct):
+        return direct
+    return DEFAULT_PROVIDER

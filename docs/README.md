@@ -1,4 +1,4 @@
-# OpenNexus documentation
+# Agentaria documentation
 
 Every guide lives here, in the repository, so a change to the product and the
 change to its documentation travel in the same pull request. Guides are written
@@ -24,8 +24,13 @@ Everything you need to build, brand and operate AI agents for your clients.
 - [Agents](en/agents.md) — Instructions, context, models and multimodal capabilities.
 - [Knowledge base](en/knowledge-base.md) — Manual context, Q&A pairs, PDFs and semantic retrieval.
 - [AI providers](en/ai-providers.md) — Connect your OpenRouter key and pick per-agent models from any vendor.
+- [Appointment booking](en/booking.md) — Bookable hours per client, agents that book and cancel in the chat, and reminders.
+- [Sales pipeline](en/sales-pipeline.md) — A board of each client's contacts by stage, kept up to date by the agents.
+- [WhatsApp campaigns](en/campaigns.md) — An approved template to a chosen list of contacts, with who read and replied.
 - [Reports](en/reports.md) — What every reply cost, by client, agent, model and day, with CSV export.
 - [Custom tools](en/custom-tools.md) — Let agents call HTTP endpoints and MCP servers during a conversation.
+- [AI agents over MCP](en/mcp-server.md) — Connect Claude Code, Cursor or Codex to the workspace with a personal token.
+- [Sandbox](en/sandbox.md) — One WhatsApp number where each prospect tries their agent by sending its code.
 
 **Channels**
 
@@ -33,16 +38,21 @@ Everything you need to build, brand and operate AI agents for your clients.
 - [WhatsApp Cloud API](en/whatsapp-cloud-api.md) — Connect a number through Meta's official Cloud API: app, token, webhook and going live.
 - [Template webhooks](en/template-webhooks.md): an address another system calls to send an approved WhatsApp template that the agent then follows up on.
 - [Web chat widget](en/web-widget.md) — Embed an agent on any website with a single snippet.
+- [Phone calls](en/phone-calls.md): a voice agent answers a client's number through ElevenLabs, with Twilio or Telnyx numbers.
 
 **Operating**
 
 - [Inbox](en/inbox.md) — Search, filter and take over conversations from AI to human.
 - [Client portal & domains](en/client-portal.md) — Give each client a branded portal on its own custom domain.
+- [Workspace domain](en/workspace-domain.md) — The whole workspace on a branded subdomain or your own domain.
+- [Billing](en/billing.md) — Plans, AI credit and Stripe payments, for operators who host the workspace for an agency.
 - [Dashboard](en/dashboard.md) — Activity, top agents and token usage by model.
 - [Push notifications](en/push-notifications.md) — The provider seam for mobile push: what ships, what it costs and how to register one.
 
 **Self-hosting**
 
+- [Team and security](en/team-and-security.md) — Invitations, roles and two-step verification.
+- [Deploy on Render](en/deploy-render.md) — The whole stack from one Blueprint, private until you claim it with the setup token.
 - [Self-hosting](en/self-hosting.md) — Deploy to a server, back up data, upgrade and troubleshoot.
 - [Contributing](en/contributing.md) — Run the project locally, the test suites and the conventions.
 
@@ -64,8 +74,13 @@ Todo lo que necesitas para construir, marcar y operar agentes de IA para tus cli
 - [Agentes](es/agents.md) — Instrucciones, contexto, modelos y capacidades multimodales.
 - [Base de conocimiento](es/knowledge-base.md) — Contexto manual, pares de preguntas y respuestas, PDFs y recuperación semántica.
 - [Proveedores de IA](es/ai-providers.md) — Conecta tu clave de OpenRouter y elige modelos de cualquier proveedor por agente.
+- [Agenda de citas](es/booking.md) — Horarios por cliente, agentes que agendan y cancelan en el chat, y recordatorios.
+- [Embudo de ventas](es/sales-pipeline.md) — Un tablero de los contactos de cada cliente por etapa, que los agentes mantienen al día.
+- [Campañas de WhatsApp](es/campaigns.md) — Una plantilla aprobada a una lista de contactos elegida, con quién leyó y respondió.
 - [Reportes](es/reports.md) — Lo que costó cada respuesta, por cliente, agente, modelo y día, con exportación CSV.
 - [Herramientas personalizadas](es/custom-tools.md) — Permite que los agentes llamen endpoints HTTP y servidores MCP durante una conversación.
+- [Agentes de IA por MCP](es/mcp-server.md) — Conecta Claude Code, Cursor o Codex al espacio de trabajo con un token personal.
+- [Sandbox](es/sandbox.md) — Un número de WhatsApp donde cada prospecto prueba su agente enviando su código.
 
 **Canales**
 
@@ -73,15 +88,20 @@ Todo lo que necesitas para construir, marcar y operar agentes de IA para tus cli
 - [API de WhatsApp Cloud](es/whatsapp-cloud-api.md) — Conecta un número por la API Cloud oficial de Meta: app, token, webhook y salida a producción.
 - [Webhooks de plantilla](es/template-webhooks.md): una dirección que otro sistema llama para enviar una plantilla aprobada de WhatsApp que el agente luego continúa.
 - [Widget de chat web](es/web-widget.md) — Integra un agente en cualquier sitio web con un único snippet.
+- [Llamadas telefónicas](es/phone-calls.md): un agente de voz contesta el número de un cliente con ElevenLabs, con números de Twilio o Telnyx.
 
 **Operación**
 
 - [Bandeja de entrada](es/inbox.md) — Busca, filtra y toma el control de conversaciones de IA a humano.
 - [Portal del cliente y dominios](es/client-portal.md) — Dale a cada cliente un portal con su marca en su propio dominio.
+- [Dominio del espacio de trabajo](es/workspace-domain.md) — Todo el espacio de trabajo en un subdominio con tu marca o en tu propio dominio.
+- [Facturación](es/billing.md) — Planes, crédito de IA y pagos con Stripe, para quien opera el espacio de trabajo para una agencia.
 - [Panel](es/dashboard.md) — Actividad, agentes destacados y uso de tokens por modelo.
 - [Notificaciones push](es/push-notifications.md) — La costura de proveedores para push móvil: qué trae, qué cuesta y cómo registrar uno.
 
 **Autoalojamiento**
 
+- [Equipo y seguridad](es/team-and-security.md) — Invitaciones, roles y verificación en dos pasos.
+- [Desplegar en Render](es/deploy-render.md) — Todo el stack desde un Blueprint, privado hasta que lo reclamas con el token de instalación.
 - [Autoalojamiento](es/self-hosting.md) — Despliega en un servidor, respalda datos, actualiza y resuelve problemas.
 - [Contribuir](es/contributing.md) — Ejecuta el proyecto en local, las suites de pruebas y las convenciones.

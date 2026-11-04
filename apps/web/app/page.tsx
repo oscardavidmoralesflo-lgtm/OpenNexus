@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Bot, Building2, Cpu, MessagesSquare, MessageSquareText, Radio, UserRound, X } from "lucide-react";
+import { ArrowRight, Bot, Building2, CircleDollarSign, Cpu, MessagesSquare, MessageSquareText, Radio, Sparkles, Timer, UserRound, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useLanguage } from "@/lib/i18n";
 import { businessLabel, useIndustries } from "@/lib/industries";
@@ -14,7 +14,15 @@ type Dashboard = { clients: number; active_clients: number; agents: number; acti
 type DailyPoint = { date: string; count: number };
 type TopAgent = { id: string; name: string; conversations: number };
 type ModelUsage = { model: string; input_tokens: number; output_tokens: number };
-type Metrics = { messages: number; human_conversations: number; by_channel: Record<string, number>; daily_conversations: DailyPoint[]; top_agents: TopAgent[]; tokens_in: number; tokens_out: number; usage_by_model: ModelUsage[] };
+type Metrics = { conversations: number; ai_resolved: number; ai_resolved_pct: number; first_reply_median_s: number | null; ai_replies: number; ai_cost_usd: number; messages: number; human_conversations: number; by_channel: Record<string, number>; daily_conversations: DailyPoint[]; top_agents: TopAgent[]; tokens_in: number; tokens_out: number; usage_by_model: ModelUsage[] };
+
+// "7 s", "3 min", "1.5 h": the first reply time at a glance.
+function formatDuration(seconds: number | null | undefined) {
+  if (seconds == null) return "—";
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  return `${(seconds / 3600).toFixed(1).replace(/\.0$/, "")} h`;
+}
 
 const STEPS_HIDDEN_KEY = "opennexus.home.nextStepsHidden";
 
@@ -54,6 +62,12 @@ export default function HomePage() {
         <div className="panel-head"><div><h3>{t("home.nextSteps.title")}</h3><p>{t("home.nextSteps.subtitle")}</p></div><button type="button" className="icon-button steps-dismiss" onClick={hideSteps} title={t("home.nextSteps.dismiss")} aria-label={t("home.nextSteps.dismiss")}><X size={16} /></button></div>
         <ol><li className={loadedCore && data?.clients ? "done" : ""}>{loadedCore ? <span>{data?.clients ? "✓" : "1"}</span> : <span><Skeleton style={{ width: 18, height: 18, borderRadius: 999 }} /></span>}<div><strong>{t("home.nextSteps.step1Title")}</strong><small>{t("home.nextSteps.step1Desc")}</small></div></li><li className={loadedCore && data?.agents ? "done" : ""}>{loadedCore ? <span>{data?.agents ? "✓" : "2"}</span> : <span><Skeleton style={{ width: 18, height: 18, borderRadius: 999 }} /></span>}<div><strong>{t("home.nextSteps.step2Title")}</strong><small>{t("home.nextSteps.step2Desc")}</small></div></li><li className={loadedCore && modelConnected ? "done" : ""}>{loadedCore ? <span>{modelConnected ? "✓" : "3"}</span> : <span><Skeleton style={{ width: 18, height: 18, borderRadius: 999 }} /></span>}<div><strong>{t("home.nextSteps.step3Title")}</strong><small>{t("home.nextSteps.step3Desc")}</small></div></li></ol>
       </section>}
+      <section className="metrics-grid value-grid">
+        <article className="metric-card"><span className="metric-icon green"><Sparkles size={20} /></span><div><small>{t("home.value.aiResolved")}</small><strong>{loadedMetrics ? `${metrics?.ai_resolved_pct ?? 0}%` : <Skeleton className="sk-line" style={{ width: 52, height: 28 }} />}</strong><p>{t("home.value.aiResolvedCaption", { solved: metrics?.ai_resolved ?? 0, total: metrics?.conversations ?? 0 })}</p></div></article>
+        <article className="metric-card"><span className="metric-icon blue"><Timer size={20} /></span><div><small>{t("home.value.firstReply")}</small><strong>{loadedMetrics ? formatDuration(metrics?.first_reply_median_s) : <Skeleton className="sk-line" style={{ width: 52, height: 28 }} />}</strong><p>{t("home.value.firstReplyCaption")}</p></div></article>
+        <article className="metric-card"><span className="metric-icon violet"><Bot size={20} /></span><div><small>{t("home.value.aiReplies")}</small><strong>{loadedMetrics ? (metrics?.ai_replies ?? 0).toLocaleString(lang) : <Skeleton className="sk-line" style={{ width: 52, height: 28 }} />}</strong><p>{t("home.value.aiRepliesCaption")}</p></div></article>
+        <article className="metric-card"><span className="metric-icon amber"><CircleDollarSign size={20} /></span><div><small>{t("home.value.aiCost")}</small><strong>{loadedMetrics ? `$${(metrics?.ai_cost_usd ?? 0).toFixed(2)}` : <Skeleton className="sk-line" style={{ width: 52, height: 28 }} />}</strong><p>{t("home.value.aiCostCaption")}</p></div></article>
+      </section>
       <section className="metrics-grid">
         <article className="metric-card"><span className="metric-icon blue"><Building2 size={20} /></span><div><small>{t("home.metrics.clients")}</small><strong>{loadedCore ? data?.clients ?? "—" : <Skeleton className="sk-line" style={{ width: 52, height: 28 }} />}</strong><p>{t("home.metrics.clientsActive", { count: data?.active_clients ?? 0 })}</p></div></article>
         <article className="metric-card"><span className="metric-icon violet"><Bot size={20} /></span><div><small>{t("home.metrics.agents")}</small><strong>{loadedCore ? agents.length || data?.agents || "—" : <Skeleton className="sk-line" style={{ width: 52, height: 28 }} />}</strong><p>{t("home.metrics.agentsActive", { count: agents.filter((item) => item.is_active).length })}</p></div></article>

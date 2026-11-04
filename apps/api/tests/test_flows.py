@@ -62,7 +62,7 @@ def test_chat_completion_uses_chat_completions_and_reads_cost(monkeypatch):
     assert answer.text == "OK"
     assert captured["url"].endswith("/chat/completions")
     assert captured["headers"]["Authorization"] == "Bearer secret"
-    assert captured["headers"]["X-Title"] == "OpenNexus"
+    assert captured["headers"]["X-Title"] == "Agentaria"
     assert captured["payload"]["messages"] == [{"role": "system", "content": "Be brief"}, {"role": "user", "content": "Hello"}]
     assert captured["payload"]["usage"] == {"include": True}  # ask the router to price the call
     assert captured["payload"]["max_tokens"] == 100
@@ -104,7 +104,7 @@ def test_register_login_logout_and_me(client: TestClient):
 
 def test_single_agency_instance_closes_registration(client: TestClient):
     status = client.get("/api/auth/status").json()
-    assert status == {"needs_setup": True, "registration_open": True}
+    assert status == {"needs_setup": True, "registration_open": True, "setup_token_required": False, "password_reset": False}
 
     first = client.post(
         "/api/auth/register",
@@ -113,7 +113,7 @@ def test_single_agency_instance_closes_registration(client: TestClient):
     assert first.status_code == 201
 
     status = client.get("/api/auth/status").json()
-    assert status == {"needs_setup": False, "registration_open": False}
+    assert status == {"needs_setup": False, "registration_open": False, "setup_token_required": False, "password_reset": False}
 
     second = client.post(
         "/api/auth/register",
@@ -133,7 +133,7 @@ def test_provider_key_is_stored_masked(authenticated_client: TestClient):
     assert "encrypted_api_key" not in saved.json()
 
     listed = authenticated_client.get("/api/providers").json()
-    assert {p["provider"] for p in listed} == {"openrouter"}
+    assert {p["provider"] for p in listed} == set(providers_router.SUPPORTED)
     assert next(p for p in listed if p["provider"] == "openrouter")["configured"] is True
 
 

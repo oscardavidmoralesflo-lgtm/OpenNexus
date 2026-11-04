@@ -1,22 +1,62 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Eye, EyeOff, ImagePlus, LoaderCircle, PauseCircle, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { Bot, CheckCircle2, History, Lock, Users, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LoaderCircle, Palette, PauseCircle, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { Alert, PageHead } from "@/components/ui";
 import { FormSkeleton } from "@/components/skeleton";
-import { PreferencesSection } from "@/components/preferences-section";
+import { SectionTabs, type SectionTab } from "@/components/section-tabs";
+import { WorkspaceDomainSection } from "@/components/settings/workspace-domain";
+import { McpAccessSection } from "@/components/settings/mcp-access";
+import { AuditSection } from "@/components/settings/audit-section";
+import { SecuritySection } from "@/components/settings/security-section";
+import { IntegrationAccessSection } from "@/components/settings/integration-access";
+import { TeamSection } from "@/components/settings/team-section";
+import { isManager, useCurrentUser } from "@/lib/current-user";
+import { AppLinks } from "@/components/app-links";
+import { KeyActions } from "@/components/key-actions";
+import { PhoneAccounts } from "@/components/phone-accounts";
 import { useToast } from "@/components/toast";
 import { api, messageFrom } from "@/lib/api";
+import { currentSections, showSections } from "@/lib/section-path";
 import { useT, type TranslateFn } from "@/lib/i18n";
 import { PROVIDERS } from "@/lib/providers";
 import type { Agency, Provider, ProviderTest } from "@/types";
 
+type SettingsTab = "identity" | "domain" | "team" | "security" | "audit" | "providers" | "integrations" | "agents";
+const SETTINGS_TABS: SettingsTab[] = ["identity", "domain", "team", "security", "audit", "providers", "integrations", "agents"];
+// What an operator or a viewer sees: their own account, and the team.
+const PERSONAL_TABS: SettingsTab[] = ["team", "security"];
+
 export default function SettingsPage() {
   const t = useT();
+  const me = useCurrentUser();
+  const manager = isManager(me?.role);
+  const available = manager ? SETTINGS_TABS : PERSONAL_TABS;
+  const [tab, setTab] = useState<SettingsTab>(manager ? "identity" : "security");
+  // The open tab rides in the address (`/settings/domain`).
+  useEffect(() => {
+    const [section] = currentSections("/settings");
+    const wanted = section && (available as string[]).includes(section) ? section as SettingsTab : available[0];
+    setTab(wanted);
+    showSections("/settings", [wanted]);
+  }, [available]);
+  const changeTab = (next: SettingsTab) => { setTab(next); showSections("/settings", [next]); };
+  const tabs: SectionTab<SettingsTab>[] = [
+    { id: "identity", label: t("settings.tabs.identity"), icon: Palette },
+    { id: "domain", label: t("settings.tabs.domain"), icon: Globe2 },
+    { id: "team", label: t("settings.tabs.team"), icon: Users },
+    { id: "security", label: t("settings.tabs.security"), icon: Lock },
+    { id: "audit", label: t("settings.tabs.audit"), icon: History },
+    { id: "integrations", label: t("tools.tab"), icon: KeyRound },
+    { id: "providers", label: t("settings.tabs.providers"), icon: KeyRound },
+    { id: "agents", label: t("settings.tabs.agents"), icon: Bot },
+  ];
+  const visibleTabs = tabs.filter((item) => available.includes(item.id));
   const toast = useToast();
   const [agency, setAgency] = useState<Agency | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [busy, setBusy] = useState(false);
+  const [providerSearch, setProviderSearch] = useState("");
   const [logoVersion, setLogoVersion] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -43,6 +83,7 @@ export default function SettingsPage() {
   async function deleteLogo() { await api("/agency/logo", { method: "DELETE" }); setLogoVersion((v) => v + 1); await load(); }
 
   async function saveKey(provider: string, apiKey: string): Promise<boolean> {
+    apiKey = apiKey.trim();
     if (!apiKey.trim()) return false;
     setBusy(true);
     try {
@@ -66,16 +107,35 @@ export default function SettingsPage() {
   if (!agency) return <div className="page"><PageHead eyebrow={t("settings.index.eyebrow")} title={t("settings.index.title")} description={t("settings.index.description")} /><FormSkeleton sections={2} /></div>;
   return <div className="page"><PageHead eyebrow={t("settings.index.eyebrow")} title={t("settings.index.title")} description={t("settings.index.description")} />
 
-    <form className="page-form" onSubmit={saveIdentity}><section className="form-section"><div className="section-copy"><h2>{t("settings.index.identityHeading")}</h2><p>{t("settings.index.identityCopy")}</p></div><div className="form-fields"><div className="logo-editor"><button type="button" className="logo-preview" onClick={() => fileRef.current?.click()}>{agency.logo_url ? <img src={`${agency.logo_url}?v=${logoVersion}`} alt={t("settings.index.logoAlt")} /> : <ImagePlus size={24} />}</button><div><strong>{t("settings.index.logoLabel")}</strong><small>{t("settings.index.logoHint")}</small><div><button type="button" className="text-button" onClick={() => fileRef.current?.click()}>{t("settings.index.change")}</button>{agency.logo_url && <button type="button" className="text-button danger-text" onClick={deleteLogo}><Trash2 size={14} /> {t("settings.index.remove")}</button>}</div></div><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(e) => uploadLogo(e.target.files?.[0])} /></div><div className="form-grid"><label>{t("settings.index.agencyName")}<input name="name" required defaultValue={agency.name} /></label><label>{t("settings.index.identifier")}<input name="slug" required defaultValue={agency.slug} /></label></div><label>{t("settings.index.brandColor")}<div className="color-input"><input type="color" name="brand_color" defaultValue={agency.brand_color} /><input defaultValue={agency.brand_color} readOnly /></div></label><button className="button primary align-start" disabled={busy}>{busy ? <LoaderCircle size={17} className="spin" /> : <Save size={17} />} {t("settings.index.saveIdentity")}</button></div></section></form>
+    <SectionTabs tabs={visibleTabs} value={tab} onChange={changeTab} />
 
-    <section className="section-block"><div className="section-heading"><div><h2>{t("settings.providers.heading")}</h2><p>{t("settings.providers.copy")}</p></div></div>
+    {tab === "identity" && <form className="page-form" onSubmit={saveIdentity}><section className="form-section"><div className="section-copy"><h2>{t("settings.index.identityHeading")}</h2><p>{t("settings.index.identityCopy")}</p></div><div className="form-fields"><div className="logo-editor"><button type="button" className="logo-preview" onClick={() => fileRef.current?.click()}>{agency.logo_url ? <img src={`${agency.logo_url}?v=${logoVersion}`} alt={t("settings.index.logoAlt")} /> : <ImagePlus size={24} />}</button><div><strong>{t("settings.index.logoLabel")}</strong><small>{t("settings.index.logoHint")}</small><div><button type="button" className="text-button" onClick={() => fileRef.current?.click()}>{t("settings.index.change")}</button>{agency.logo_url && <button type="button" className="text-button danger-text" onClick={deleteLogo}><Trash2 size={14} /> {t("settings.index.remove")}</button>}</div></div><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={(e) => uploadLogo(e.target.files?.[0])} /></div><div className="form-grid"><label>{t("settings.index.agencyName")}<input name="name" required defaultValue={agency.name} /></label><label>{t("settings.index.identifier")}<input name="slug" required defaultValue={agency.slug} /></label></div><label>{t("settings.index.brandColor")}<div className="color-input"><input type="color" name="brand_color" defaultValue={agency.brand_color} /><input defaultValue={agency.brand_color} readOnly /></div></label><button className="button primary align-start" disabled={busy}>{busy ? <LoaderCircle size={17} className="spin" /> : <Save size={17} />} {t("settings.index.saveIdentity")}</button></div></section></form>}
+
+    {tab === "identity" && (agency.ios_app_url || agency.android_app_url) && <section className="form-section"><div className="section-copy"><h2>{t("settings.index.mobileAppHeading")}</h2><p>{t("settings.index.mobileAppCopy")}</p></div><div className="form-fields"><AppLinks ios={agency.ios_app_url} android={agency.android_app_url} /></div></section>}
+
+    {tab === "domain" && <WorkspaceDomainSection />}
+
+    {tab === "team" && <TeamSection />}
+
+    {tab === "security" && <SecuritySection />}
+    {tab === "audit" && <AuditSection />}
+
+    {tab === "providers" && <section className="section-block"><div className="section-heading"><div><h2>{t("settings.providers.heading")}</h2><p>{t("settings.providers.copy")}</p></div></div>
       <div className="security-note"><ShieldCheck size={20} /><span><strong>{t("settings.index.privateCredentials")}</strong> {t("settings.index.privateCredentialsCopy")}</span></div>
-      {PROVIDERS.map((preset) => (
+      <label>{t("settings.providers.search")}<input type="search" value={providerSearch} onChange={(e) => setProviderSearch(e.target.value)} placeholder={t("settings.providers.searchPlaceholder")} /></label>
+      <p className="field-help">{t("settings.providers.summary", { configured: providers.filter((p) => p.configured).length, total: PROVIDERS.length })}</p>
+      <p className="field-help">{t("settings.providers.capabilitiesHint")}</p>
+      {!PROVIDERS.some((p) => p.label.toLowerCase().includes(providerSearch.trim().toLowerCase())) && <p className="muted">{t("settings.providers.noResults")}</p>}
+      {PROVIDERS.filter((p) => p.label.toLowerCase().includes(providerSearch.trim().toLowerCase())).map((preset) => (
         <ProviderKeyCard key={preset.id} preset={preset} state={providers.find((x) => x.provider === preset.id)} busy={busy} onSave={saveKey} onRemove={removeKey} onToggle={toggleKey} t={t} />
       ))}
-    </section>
+    </section>}
 
-    <PreferencesSection />
+    {tab === "integrations" && <IntegrationAccessSection />}
+
+    {tab === "providers" && <PhoneAccounts />}
+
+    {tab === "agents" && <McpAccessSection />}
   </div>;
 }
 
@@ -83,6 +143,18 @@ function ProviderKeyCard({ preset, state, busy, onSave, onRemove, onToggle, t }:
   const [key, setKey] = useState("");
   const [reveal, setReveal] = useState(false);
   const [replacing, setReplacing] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [verification, setVerification] = useState("");
+  const [verificationError, setVerificationError] = useState(false);
+  async function verify() {
+    setTesting(true); setVerification("");
+    try {
+      const result = await api<ProviderTest>(`/providers/${preset.id}/test`, { method: "POST" });
+      setVerificationError(false);
+      setVerification(result.models?.length ? t("tools.catalog.modelsVerified", { count: result.models.length }) : t("tools.catalog.providerVerified"));
+    } catch (err) { setVerificationError(true); setVerification(messageFrom(err)); }
+    finally { setTesting(false); }
+  }
   // A stored key is shown whether it is in use or paused; "configured" alone
   // is also true while the deployment lends one.
   const stored = Boolean(state?.stored ?? state?.api_key_masked);
@@ -94,17 +166,19 @@ function ProviderKeyCard({ preset, state, busy, onSave, onRemove, onToggle, t }:
   }
 
   return (
-    <section className="form-section"><div className="section-copy"><h2>{preset.label}</h2><p>{t("settings.providers.byo", { label: preset.label })}</p></div>
-      <div className="form-fields">
+    <section className="form-section"><div className="section-copy"><h2>{preset.label}</h2><p>{t("settings.providers.byo", { label: preset.label })}</p><a className="text-button" href={preset.keyUrl} target="_blank" rel="noopener noreferrer">{t("settings.providers.getKey")}</a></div>
+      <div className="form-fields key-form">
         {configured ? (
           <div className="key-configured">
-            <span className="key-configured-status">{enabled ? <CheckCircle2 size={18} /> : <PauseCircle size={18} />} {t(enabled ? "settings.providers.configured" : "settings.providers.paused", { label: preset.label })}</span>
-            <label className="switch-row"><span><strong>{t("settings.providers.useKey")}</strong><small>{t("settings.providers.useKeyHint")}</small></span><input type="checkbox" checked={enabled} disabled={busy} onChange={(e) => onToggle(preset.id, e.target.checked)} /></label>
-            {!enabled && !state?.configured && <Alert type="error">{t("settings.providers.pausedNothingAnswers")}</Alert>}
-            <div className="key-configured-actions">
-              <button type="button" className="button ghost" disabled={busy} onClick={() => { setKey(""); setReplacing(true); }}>{t("settings.providers.replace")}</button>
-              <button type="button" className="button danger" disabled={busy} onClick={() => onRemove(preset.id)}><Trash2 size={15} /> {t("settings.providers.remove")}</button>
+            <div className="key-configured-head">
+              <span className="key-configured-status">{enabled ? <CheckCircle2 size={18} /> : <PauseCircle size={18} />} {t(enabled ? "settings.providers.configured" : "settings.providers.paused", { label: preset.label })}</span>
+              <KeyActions busy={busy} replaceLabel={t("settings.providers.replace")} removeLabel={t("settings.providers.remove")} confirmTitle={t("settings.providers.removeTitle", { label: preset.label })} confirmMessage={t("settings.providers.removeCopy")} toggle={{ checked: enabled, label: t("settings.providers.useKey"), hint: t("settings.providers.useKeyHint"), confirm: (on) => on
+                ? { title: t("settings.providers.resumeTitle", { label: preset.label }), message: t("settings.providers.resumeCopy", { label: preset.label }), label: t("settings.providers.resumeConfirm") }
+                : { title: t("settings.providers.pauseTitle", { label: preset.label }), message: t("settings.providers.pauseCopy"), label: t("settings.providers.pauseConfirm") }, onChange: (on) => onToggle(preset.id, on) }} onReplace={() => { setKey(""); setReplacing(true); }} onRemove={() => onRemove(preset.id)} />
             </div>
+            {!enabled && !state?.configured && <Alert type="error">{t("settings.providers.pausedNothingAnswers")}</Alert>}
+            {verification && <Alert type={verificationError ? "error" : "success"}>{verification}</Alert>}
+            <div className="form-footer"><button type="button" className="button secondary" disabled={busy || testing} onClick={() => void verify()}>{testing ? <LoaderCircle className="spin" size={15} /> : <CheckCircle2 size={15} />} {t("tools.catalog.verifyProvider")}</button></div>
           </div>
         ) : (
           <>

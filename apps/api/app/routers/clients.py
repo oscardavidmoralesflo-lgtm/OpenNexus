@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_user
 from .. import industries
-from ..models import Agent, AgentCaptureField, Client, Contact, ContactField, Conversation, PortalUser, PushDevice, User, new_domain_token, Team
+from ..models import Agency, Agent, AgentCaptureField, Client, Contact, ContactField, Conversation, PortalUser, PushDevice, User, new_domain_token, Team
 from ..portal_permissions import DEFAULT_ROLE
 from ..schemas import (
     ClientDeletionPreview,
@@ -49,6 +50,7 @@ from ..services.whatsapp_templates import (
     validate_template_name,
 )
 from ..services import dns as dns_service
+from ..services import phone_calls
 from ..slugs import slugify, unique_slug
 
 
@@ -58,13 +60,15 @@ ALLOWED_LOGO_TYPES = {"image/png", "image/jpeg", "image/webp", "image/svg+xml"}
 
 
 def _domain_out(client: Client) -> ClientDomainOut:
+    cname_target = (get_settings().portal_domain_cname_target or "").strip() or None
     if not client.portal_domain:
-        return ClientDomainOut(domain=None, verified=False, txt_host=None, txt_value=None)
+        return ClientDomainOut(domain=None, verified=False, txt_host=None, txt_value=None, cname_target=cname_target)
     return ClientDomainOut(
         domain=client.portal_domain,
         verified=client.portal_domain_verified,
         txt_host=dns_service.challenge_host(client.portal_domain),
         txt_value=client.portal_domain_token,
+        cname_target=cname_target,
     )
 
 
@@ -98,6 +102,8 @@ def list_clients(db: Session = Depends(get_db), user: User = Depends(get_current
 @router.post("", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
 def create_client(payload: ClientCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _check_industry(payload.industry, payload.business_type)
+    from ..services.billing import check_client_limit
+    check_client_limit(db, user.agency)
     client = Client(
         agency_id=user.agency_id,
         portal_slug=unique_slug(db, Client, "portal_slug", payload.name),
@@ -114,7 +120,7 @@ def get_client(client_id: uuid.UUID, db: Session = Depends(get_db), user: User =
 
 
 @router.patch("/{client_id}", response_model=ClientOut)
-def update_client(client_id: uuid.UUID, payload: ClientUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+async def update_client(client_id: uuid.UUID, payload: ClientUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     client = _client(db, user, client_id)
     values = payload.model_dump(exclude_unset=True)
     industry = values.get("industry", client.industry)
@@ -127,6 +133,9 @@ def update_client(client_id: uuid.UUID, payload: ClientUpdate, db: Session = Dep
     for key, value in values.items():
         setattr(client, key, value)
     db.commit()
+    # Its phone lines carry the client's name, business and timezone.
+    if phone_calls.CLIENT_LINE_FIELDS & values.keys():
+        phone_calls.refresh_lines_soon(db, client_id=client.id)
     return _client(db, user, client_id)
 
 
@@ -209,7 +218,7 @@ def set_client_domain(
     client = _client(db, user, client_id)
     domain = payload.domain.strip().lower()
     taken = db.scalar(select(Client).where(Client.portal_domain == domain, Client.id != client.id))
-    if taken:
+    if taken or db.scalar(select(Agency.id).where(Agency.workspace_domain == domain)):
         raise HTTPException(status_code=409, detail="That domain is already in use")
     # Re-assigning resets verification and issues a fresh challenge token.
     if client.portal_domain != domain or not client.portal_domain_token:
@@ -625,4 +634,6 @@ def delete_contact_field(
     strip_attribute(db, client.id, row.key)
     db.delete(row)
     db.commit()
+    # The agents that collected it on calls stop offering to save it.
+    phone_calls.refresh_lines_soon(db, client_id=client.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -5,11 +5,12 @@
 # See docs/self-hosting.md ("Custom domains for client portals").
 #
 # Caddy obtains a certificate on demand for any client domain, but only after
-# asking the API whether that domain is a verified portal domain — so it never
+# asking the API whether it serves that host (a verified portal or workspace
+# domain, or an agency's branded subdomain) — so it never
 # issues certificates for arbitrary hosts pointed at the server.
 {
 	on_demand_tls {
-		ask http://api:8000/api/public/portal-domain
+		ask http://api:8000/api/public/tls-ask
 	}
 }
 

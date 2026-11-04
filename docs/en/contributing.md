@@ -2,7 +2,7 @@
 
 > Leer en español: [contributing.md](../es/contributing.md)
 
-Docker is the fastest way to run OpenNexus, but for day-to-day development you usually want each service running on the host with hot reload. This guide covers running the backend, frontend and WhatsApp bridge locally, the test suites, migrations and the project conventions.
+Docker is the fastest way to run Agentaria, but for day-to-day development you usually want each service running on the host with hot reload. This guide covers running the backend, frontend and WhatsApp bridge locally, the test suites, migrations and the project conventions.
 
 ## Installation scope
 
@@ -102,7 +102,7 @@ All code, identifiers, comments, commit messages and docs are written in **Engli
 
 ## Extension points
 
-A deployment that runs OpenNexus for others may need to add to it without
+A deployment that runs Agentaria for others may need to add to it without
 forking. These are the places that are meant for that, kept stable on purpose;
 changing their shape is a breaking change and gets a line in the changelog:
 
@@ -111,6 +111,16 @@ changing their shape is a breaking change and gets a line in the changelog:
 - `app.services.providers.register_credential_fallback(fn, available=probe)`:
   lends a key to an agency that stored none; `credential_source()` says which
   one would answer, and `GET /api/providers` reports it as `source`.
+- `app.services.phone_calls.register_call_account_fallback(fn)`: lends a
+  phone account (the ElevenLabs workspace, a carrier) to an agency that stored
+  none; `GET /api/phone/accounts` reports it as `source`.
+- `app.services.phone_calls.register_public_base(fn)`: says where ElevenLabs
+  calls an agency back (who is calling, the line's tools, the end-of-call
+  report), for a deployment that serves each agency on its own address;
+  `PHONE_PUBLIC_URL` answers otherwise.
+- `app.services.phone_calls.refresh_lines_soon(db, agent_id=...)`: writes an
+  agent's phone lines again a moment later, once per burst. Code outside the
+  core's endpoints that changes an agent's tools calls it.
 - `app.services.usage.register_usage_hook(fn)`: sees every usage record as it
   is written, inside the caller's session; it cannot fail the reply.
 - `app.services.notifications.register_provider(name, fn)`: delivers push

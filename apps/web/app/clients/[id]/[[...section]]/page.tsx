@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Bot, Copy, ExternalLink, FileText, Globe2, ImagePlus, ListChecks, LoaderCircle, MessageCircle, Pencil, QrCode, Radio, Save, Settings2, ShieldAlert, ShieldCheck, Tag, Trash2, UserCheck, UserRound, Users, UserX, Webhook } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, CalendarDays, KanbanSquare, Megaphone, Copy, ExternalLink, FileBarChart, FileText, Globe2, ImagePlus, ListChecks, LoaderCircle, MessageCircle, Pencil, QrCode, Radio, Save, Settings2, ShieldAlert, ShieldCheck, Tag, Trash2, UserCheck, UserRound, Users, UserX, Webhook } from "lucide-react";
+import { NewAgentMenu } from "@/components/new-agent-menu";
+import { BookingPanel } from "@/components/booking-panel";
+import { PipelineBoard } from "@/components/pipeline-board";
+import { CampaignsPanel } from "@/components/campaigns-panel";
 import { Alert, EmptyState, Modal, StatusBadge } from "@/components/ui";
 import { SectionTabs } from "@/components/section-tabs";
 import { IndustryPicker, isBusinessComplete, type IndustryValue } from "@/components/industry-picker";
@@ -24,18 +28,19 @@ import { WhatsAppCloudSetup } from "@/components/channels/whatsapp-cloud";
 import { WhatsAppSetup } from "@/components/channels/whatsapp";
 import { WebChatSetup } from "@/components/channels/webchat";
 import { SocialChannelSetup } from "@/components/channels/social";
+import { PhoneSetup } from "@/components/channels/phone";
 import { api, ApiError, messageFrom } from "@/lib/api";
 import { currentSections, showSections } from "@/lib/section-path";
 import { useLanguage, useT } from "@/lib/i18n";
 import { businessLabel, useIndustries } from "@/lib/industries";
-import type { Client, ClientDomain, PortalRole, PortalUser, SocialChannel, WhatsAppChannel, WhatsAppCloudChannel, WidgetChannel } from "@/types";
+import type { Client, ClientDomain, PhoneLine, PortalRole, PortalUser, SocialChannel, WhatsAppChannel, WhatsAppCloudChannel, WidgetChannel } from "@/types";
 
-type Tab = "details" | "agents" | "channels" | "teams" | "tags" | "fields" | "templates" | "webhooks" | "portal";
-const TABS: Tab[] = ["details", "agents", "channels", "teams", "tags", "fields", "templates", "webhooks", "portal"];
-type ChannelKey = "whatsapp_cloud" | "whatsapp" | "webchat" | "instagram" | "messenger";
+type Tab = "details" | "agents" | "channels" | "booking" | "pipeline" | "campaigns" | "teams" | "tags" | "fields" | "templates" | "webhooks" | "portal";
+const TABS: Tab[] = ["details", "agents", "channels", "booking", "pipeline", "campaigns", "teams", "tags", "fields", "templates", "webhooks", "portal"];
+type ChannelKey = "whatsapp_cloud" | "whatsapp" | "webchat" | "instagram" | "messenger" | "phone";
 /** A channel's setup view, named in the address as `/channels/<kind>`. */
-type ChannelKind = "whatsapp-cloud" | "whatsapp" | "webchat" | "instagram" | "messenger";
-const CHANNEL_KINDS: ChannelKind[] = ["whatsapp-cloud", "whatsapp", "webchat", "instagram", "messenger"];
+type ChannelKind = "whatsapp-cloud" | "whatsapp" | "webchat" | "instagram" | "messenger" | "phone";
+const CHANNEL_KINDS: ChannelKind[] = ["whatsapp-cloud", "whatsapp", "webchat", "instagram", "messenger", "phone"];
 type ChannelState = "loading" | "off" | "pending" | "connected" | "disconnected";
 type ChannelStatus = { state: ChannelState; detail?: string };
 
@@ -114,11 +119,13 @@ export default function ClientDetailPage() {
       api<WidgetChannel>(`/webchat/channels/${id}`).catch(missing),
       api<SocialChannel[]>(`/social/instagram/clients/${id}/channels`),
       api<SocialChannel[]>(`/social/messenger/clients/${id}/channels`),
-    ]).then(([cloud, qr, widget, instagram, messenger]) => setChannelStates({
+      api<PhoneLine[]>(`/phone/clients/${id}/lines`).catch(() => [] as PhoneLine[]),
+    ]).then(([cloud, qr, widget, instagram, messenger, phone]) => setChannelStates({
       whatsapp_cloud: manyState(cloud, (item) => item.status === "connected" ? "connected" : "disconnected", (item) => item.phone_number || item.display_name || "", (item, n) => accountName(item, t("clients.whatsappCloud.numberFallback", { n })), t("clients.detail.channelNumbers", { count: cloud.length, connected: cloud.filter((item) => item.status === "connected").length })),
       whatsapp: manyState(qr, (item) => item.status === "connected" ? "connected" : item.status === "qr" || item.status === "connecting" || item.status === "reconnecting" ? "pending" : "disconnected", (item) => item.phone_number || "", (item, n) => accountName(item, t("clients.whatsapp.lineFallback", { n })), t("clients.detail.channelNumbers", { count: qr.length, connected: qr.filter((item) => item.status === "connected").length })),
       webchat: widget ? { state: widget.is_enabled ? "connected" : "disconnected" } : { state: "off" },
       instagram: manyState(instagram, (item) => socialState(item).state, (item) => socialState(item).detail || "", (item, n) => accountName(item, t("social.accountFallback", { n })), t("clients.detail.channelAccounts", { count: instagram.length, connected: instagram.filter((item) => socialState(item).state === "connected").length })),
+      phone: manyState(phone, (item) => item.status === "connected" && item.is_enabled ? "connected" : "disconnected", (item) => item.phone_number, (item, n) => accountName(item, t("phone.channel.lineFallback", { n })), t("phone.channel.linesSummary", { count: phone.length, connected: phone.filter((item) => item.status === "connected" && item.is_enabled).length })),
       messenger: manyState(messenger, (item) => socialState(item).state, (item) => socialState(item).detail || "", (item, n) => accountName(item, t("social.accountFallback", { n })), t("clients.detail.channelAccounts", { count: messenger.length, connected: messenger.filter((item) => socialState(item).state === "connected").length })),
     })).catch(() => {});
   }, [id, t, statesVersion]);
@@ -171,6 +178,8 @@ export default function ClientDetailPage() {
   }
 
   if (!client) return <div className="page"><FormSkeleton sections={2} /></div>;
+  // Chat channels are answered by chat agents; voice agents only take calls.
+  const chatClient: Client = { ...client, agents: client.agents.filter((agent) => agent.kind !== "voice") };
   // The portal lives under whatever host is serving this app, so the prefix
   // and the preview follow the browser origin. A verified custom domain
   // serves the portal at its root instead (see proxy.ts).
@@ -179,11 +188,14 @@ export default function ClientDetailPage() {
   const portalUrl = domain?.verified && domain.domain ? `https://${domain.domain}` : defaultPortalUrl;
   return <div className="page">
     <Link href="/clients" className="back-link"><ArrowLeft size={17} /> {t("clients.detail.back")}</Link>
-    <header className="entity-header"><div className="entity-avatar xl">{client.name.slice(0, 2).toUpperCase()}</div><div><div className="title-line"><h1>{client.name}</h1><StatusBadge active={client.is_active} /></div><p>{businessLabel(catalog, client, lang) || t("clients.detail.industryUndefined")} · {client.agents.length === 1 ? t("clients.detail.agentOne", { count: client.agents.length }) : t("clients.detail.agentMany", { count: client.agents.length })}</p></div><div className="header-actions"><Link href={`/agents/new?client=${client.id}`} className="button primary"><Bot size={17} /> {t("clients.detail.newAgent")}</Link></div></header>
+    <header className="entity-header"><div className="entity-avatar xl">{client.name.slice(0, 2).toUpperCase()}</div><div><div className="title-line"><h1>{client.name}</h1><StatusBadge active={client.is_active} /></div><p>{businessLabel(catalog, client, lang) || t("clients.detail.industryUndefined")} · {client.agents.length === 1 ? t("clients.detail.agentOne", { count: client.agents.length }) : t("clients.detail.agentMany", { count: client.agents.length })}</p></div><div className="header-actions"><Link href={`/clients/${client.id}/report`} className="button secondary"><FileBarChart size={16} /> {t("clients.report.open")}</Link><NewAgentMenu clientId={client.id} label={t("clients.detail.newAgent")} /></div></header>
     <SectionTabs<Tab> className="client-tabs" value={tab} onChange={changeTab} tabs={[
       { id: "details", label: t("clients.detail.tabDetails"), icon: Settings2 },
       { id: "agents", label: t("clients.detail.tabAgents"), icon: Bot, badge: client.agents.length },
       { id: "channels", label: t("clients.detail.tabChannels"), icon: Radio },
+      { id: "booking", label: t("clients.booking.tab"), icon: CalendarDays },
+      { id: "pipeline", label: t("clients.pipeline.tab"), icon: KanbanSquare },
+      { id: "campaigns", label: t("clients.campaigns.tab"), icon: Megaphone },
       { id: "teams", label: t("clients.detail.tabTeams"), icon: Users },
       { id: "tags", label: t("clients.detail.tabTags"), icon: Tag },
       { id: "fields", label: t("clients.detail.tabFields"), icon: ListChecks },
@@ -209,13 +221,14 @@ export default function ClientDetailPage() {
         <div className="modal-actions"><button type="button" className="button" onClick={() => setDeleteOpen(false)}>{t("common.cancel")}</button><button type="button" className="button danger" disabled={busy || !deletePreview || deleteName.trim() !== client.name.trim()} onClick={remove}>{busy ? <LoaderCircle className="spin" size={16} /> : <><Trash2 size={15} /> {t("clients.detail.deleteClient")}</>}</button></div>
       </div>
     </Modal>
-    {tab === "agents" && (client.agents.length ? <div className="table-shell"><table className="data-table"><thead><tr><th>{t("clients.detail.colAgent")}</th><th>{t("clients.detail.colStatus")}</th><th /></tr></thead><tbody>{client.agents.map((agent) => <tr key={agent.id}><td><Link className="entity-cell" href={`/agents/${agent.id}`}><span className="agent-avatar"><Bot size={18} /></span><strong>{agent.name}</strong></Link></td><td><StatusBadge active={agent.is_active} /></td><td><Link className="row-arrow" href={`/agents/${agent.id}`}><ArrowRight size={17} /></Link></td></tr>)}</tbody></table></div> : <EmptyState icon={<Bot />} title={t("clients.detail.agentsEmptyTitle")} description={t("clients.detail.agentsEmptyDescription")} action={<Link href={`/agents/new?client=${client.id}`} className="button primary">{t("clients.detail.createAgent")}</Link>} />)}
+    {tab === "agents" && (client.agents.length ? <div className="table-shell"><table className="data-table"><thead><tr><th>{t("clients.detail.colAgent")}</th><th>{t("clients.detail.colStatus")}</th><th /></tr></thead><tbody>{client.agents.map((agent) => <tr key={agent.id}><td><Link className="entity-cell" href={`/agents/${agent.id}`}><span className="agent-avatar"><Bot size={18} /></span><strong>{agent.name}</strong></Link></td><td><StatusBadge active={agent.is_active} /></td><td><Link className="row-arrow" href={`/agents/${agent.id}`}><ArrowRight size={17} /></Link></td></tr>)}</tbody></table></div> : <EmptyState icon={<Bot />} title={t("clients.detail.agentsEmptyTitle")} description={t("clients.detail.agentsEmptyDescription")} action={<NewAgentMenu clientId={client.id} label={t("clients.detail.createAgent")} />} />)}
 
-    {tab === "channels" && channelKind === "whatsapp-cloud" && <WhatsAppCloudSetup client={client} onBack={closeChannel} />}
-    {tab === "channels" && channelKind === "whatsapp" && <WhatsAppSetup client={client} onBack={closeChannel} />}
-    {tab === "channels" && channelKind === "webchat" && <WebChatSetup client={client} onBack={closeChannel} />}
-    {tab === "channels" && (channelKind === "instagram" || channelKind === "messenger") && <SocialChannelSetup provider={channelKind} client={client} onBack={closeChannel} />}
-    {tab === "channels" && !channelKind && <section className="compact-channel-grid"><article data-channel="whatsapp-cloud" className={channelState("whatsapp_cloud") === "connected" ? "channel-live" : ""}><span className="whatsapp"><MessageCircle size={20} /></span><div><strong>{t("channels.whatsappCloud.title")} <ChannelStateBadge state={channelState("whatsapp_cloud")} /></strong><small>{channelDetail("whatsapp_cloud") || t("clients.detail.channelWhatsappAvailable", { name: client.name })}</small></div><button type="button" className="button secondary" onClick={() => openChannel("whatsapp-cloud")}>{t("clients.detail.configure")}</button></article><article data-channel="whatsapp" className={channelState("whatsapp") === "connected" ? "channel-live" : ""}><span className="whatsapp"><QrCode size={20} /></span><div><strong>{t("channels.whatsapp.title")} <ChannelStateBadge state={channelState("whatsapp")} /></strong><small>{channelDetail("whatsapp") || t("clients.detail.channelWhatsappQrAvailable")}</small></div><button type="button" className="button secondary" onClick={() => openChannel("whatsapp")}>{t("clients.detail.configure")}</button></article><article data-channel="webchat" className={channelState("webchat") === "connected" ? "channel-live" : ""}><span className="webchat"><Globe2 size={20} /></span><div><strong>{t("channels.webchat.title")} <ChannelStateBadge state={channelState("webchat")} /></strong><small>{t("clients.detail.channelWebchatAvailable")}</small></div><button type="button" className="button secondary" onClick={() => openChannel("webchat")}>{t("clients.detail.configure")}</button></article>{(["instagram", "messenger"] as const).map((provider) => <article key={provider} data-channel={provider} className={channelState(provider) === "connected" ? "channel-live" : ""}><span className={provider === "instagram" ? "instagram" : "facebook"}><ChannelIcon channel={provider} size={20} /></span><div><strong>{t(`social.${provider}.title`)} <ChannelStateBadge state={channelState(provider)} /></strong><small>{channelDetail(provider) || t(`social.${provider}.description`)}</small></div><button type="button" className="button secondary" onClick={() => openChannel(provider)}>{t("social.configure")}</button></article>)}</section>}
+    {tab === "channels" && channelKind === "whatsapp-cloud" && <WhatsAppCloudSetup client={chatClient} onBack={closeChannel} />}
+    {tab === "channels" && channelKind === "whatsapp" && <WhatsAppSetup client={chatClient} onBack={closeChannel} />}
+    {tab === "channels" && channelKind === "webchat" && <WebChatSetup client={chatClient} onBack={closeChannel} />}
+    {tab === "channels" && (channelKind === "instagram" || channelKind === "messenger") && <SocialChannelSetup provider={channelKind} client={chatClient} onBack={closeChannel} />}
+    {tab === "channels" && channelKind === "phone" && <PhoneSetup client={client} onBack={closeChannel} />}
+    {tab === "channels" && !channelKind && <section className="compact-channel-grid"><article data-channel="whatsapp-cloud" className={channelState("whatsapp_cloud") === "connected" ? "channel-live" : ""}><span className="whatsapp"><MessageCircle size={20} /></span><div><strong>{t("channels.whatsappCloud.title")} <ChannelStateBadge state={channelState("whatsapp_cloud")} /></strong><small>{channelDetail("whatsapp_cloud") || t("clients.detail.channelWhatsappAvailable", { name: client.name })}</small></div><button type="button" className="button secondary" onClick={() => openChannel("whatsapp-cloud")}>{t("clients.detail.configure")}</button></article><article data-channel="whatsapp" className={channelState("whatsapp") === "connected" ? "channel-live" : ""}><span className="whatsapp"><QrCode size={20} /></span><div><strong>{t("channels.whatsapp.title")} <ChannelStateBadge state={channelState("whatsapp")} /></strong><small>{channelDetail("whatsapp") || t("clients.detail.channelWhatsappQrAvailable")}</small></div><button type="button" className="button secondary" onClick={() => openChannel("whatsapp")}>{t("clients.detail.configure")}</button></article><article data-channel="webchat" className={channelState("webchat") === "connected" ? "channel-live" : ""}><span className="webchat"><Globe2 size={20} /></span><div><strong>{t("channels.webchat.title")} <ChannelStateBadge state={channelState("webchat")} /></strong><small>{t("clients.detail.channelWebchatAvailable")}</small></div><button type="button" className="button secondary" onClick={() => openChannel("webchat")}>{t("clients.detail.configure")}</button></article>{(["instagram", "messenger"] as const).map((provider) => <article key={provider} data-channel={provider} className={channelState(provider) === "connected" ? "channel-live" : ""}><span className={provider === "instagram" ? "instagram" : "facebook"}><ChannelIcon channel={provider} size={20} /></span><div><strong>{t(`social.${provider}.title`)} <ChannelStateBadge state={channelState(provider)} /></strong><small>{channelDetail(provider) || t(`social.${provider}.description`)}</small></div><button type="button" className="button secondary" onClick={() => openChannel(provider)}>{t("social.configure")}</button></article>)}<article data-channel="phone" className={channelState("phone") === "connected" ? "channel-live" : ""}><span className="phone"><ChannelIcon channel="phone" size={20} /></span><div><strong>{t("phone.title")} <ChannelStateBadge state={channelState("phone")} /></strong><small>{channelDetail("phone") || t("phone.channel.cardCopy")}</small></div><button type="button" className="button secondary" onClick={() => openChannel("phone")}>{t("clients.detail.configure")}</button></article></section>}
 
 
     {/* Teams and WhatsApp templates are the client's own, managed here or from its portal; the views are the portal's, pointed at the agency routes. */}
@@ -223,6 +236,9 @@ export default function ClientDetailPage() {
     {tab === "tags" && <div className="embedded-portal-view"><TagsView base={`/clients/${client.id}/contact-tags`} canManage /></div>}
     {tab === "fields" && <div className="embedded-portal-view"><ContactFieldsView base={`/clients/${client.id}/contact-fields`} /></div>}
     {tab === "templates" && <div className="embedded-portal-view"><TemplatesView base={`/clients/${client.id}`} /></div>}
+    {tab === "pipeline" && <PipelineBoard clientId={client.id} />}
+    {tab === "campaigns" && <CampaignsPanel clientId={client.id} />}
+    {tab === "booking" && <BookingPanel clientId={client.id} timezone={client.timezone} />}
     {tab === "webhooks" && <div className="embedded-portal-view"><TemplateWebhooksView base={`/clients/${client.id}`} agents={client.agents} /></div>}
     {tab === "portal" && <><form className="page-form" onSubmit={savePortal}><section className="form-section"><div className="section-copy"><h2>{t("clients.detail.portalTitle")}</h2><p>{t("clients.detail.portalCopy")}</p></div><div className="form-fields"><label>{t("clients.detail.portalTitleLabel")}<input name="portal_title" defaultValue={client.portal_title} placeholder={t("clients.detail.portalTitlePlaceholder", { name: client.name })} /></label><label>{t("clients.detail.portalUrl")}<div className="slug-input"><span>{origin.replace(/^https?:\/\//, "")}/portal/</span><input name="portal_slug" defaultValue={client.portal_slug} /></div></label><div className="url-preview"><code>{portalUrl}</code><button type="button" onClick={() => navigator.clipboard.writeText(portalUrl)}><Copy size={15} /> {t("clients.detail.copy")}</button>{client.portal_enabled && <a href={portalUrl} target="_blank"><ExternalLink size={15} /> {t("clients.detail.open")}</a>}</div><label className="switch-row"><span><strong>{t("clients.detail.publishPortal")}</strong><small>{t("clients.detail.publishPortalHint")}</small></span><input name="portal_enabled" type="checkbox" defaultChecked={client.portal_enabled} /></label></div></section><div className="form-footer"><button className="button primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} {t("clients.detail.savePortal")}</button></div></form><PortalUsers clientId={client.id} /><PortalDomain clientId={client.id} domain={domain} onChange={setDomain} /></>}
   </div>;
@@ -368,14 +384,14 @@ function PortalDomain({ clientId, domain, onChange }: { clientId: string; domain
     catch (err) { toast.error(messageFrom(err)); } finally { setBusy(false); }
   }
 
-  return <section className="form-section domain-section"><div className="section-copy"><h2>{t("clients.detail.domainTitle")}</h2><p>{t("clients.detail.domainCopy")}</p></div><div className="form-fields">
+  return <section className="form-section domain-section"><div className="section-copy"><h2>{t("clients.detail.domainTitle")}</h2><p>{t("clients.detail.domainCopy")}{domain && !domain.cname_target ? ` ${t("clients.detail.domainGatewayNote")}` : ""}</p></div><div className="form-fields">
     <label>{t("clients.detail.domainLabel")}<div className="domain-input"><Globe2 size={16} /><input value={input} onChange={(e) => setInput(e.target.value)} placeholder="chat.brand.com" /><button type="button" className="button secondary" onClick={save} disabled={busy || !input.trim()}><Save size={15} /> {t("clients.detail.domainSave")}</button></div></label>
     {domain?.domain && <>
       <div className={`domain-status ${domain.verified ? "ok" : "pending"}`}>{domain.verified ? <><ShieldCheck size={16} /> {t("clients.detail.domainStatusVerified")}</> : <><ShieldAlert size={16} /> {t("clients.detail.domainStatusPending")}</>}</div>
       {!domain.verified && <div className="dns-instructions">
         <p>{t("clients.detail.domainDnsIntro")}</p>
         <table className="dns-table"><thead><tr><th>{t("clients.detail.domainDnsType")}</th><th>{t("clients.detail.domainDnsHost")}</th><th>{t("clients.detail.domainDnsValue")}</th></tr></thead><tbody>
-          <tr><td>CNAME</td><td><code>{domain.domain}</code></td><td><code>{t("clients.detail.domainCnameTarget")}</code></td></tr>
+          <tr><td>CNAME</td><td><code>{domain.domain}</code></td><td><code>{domain.cname_target ?? t("clients.detail.domainCnameTarget")}</code></td></tr>
           <tr><td>TXT</td><td><code>{domain.txt_host}</code></td><td><code>{domain.txt_value}</code></td></tr>
         </tbody></table>
         <div className="domain-actions"><button type="button" className="button primary" onClick={verify} disabled={busy}>{busy ? <LoaderCircle className="spin" size={15} /> : <ShieldCheck size={15} />} {t("clients.detail.domainVerify")}</button></div>

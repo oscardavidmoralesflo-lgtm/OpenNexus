@@ -7,6 +7,7 @@ import { useT } from "@/lib/i18n";
 import { useToast } from "@/components/toast";
 import { ConfirmModal } from "@/components/confirm-modal";
 import type { AgentTool } from "@/types";
+import { IntegrationCatalog } from "./integration-catalog";
 import { HttpToolModal } from "./http-tool-modal";
 import { McpServerModal } from "./mcp-server-modal";
 
@@ -44,6 +45,7 @@ export function AgentToolsTab({ agentId, tools, onToolsChange }: {
   }
 
   return (
+    <>
     <section className="panel tools-panel">
       <div className="panel-head">
         <div><h3>{t("tools.heading")}</h3><p>{t("tools.copy")}</p></div>
@@ -65,7 +67,7 @@ export function AgentToolsTab({ agentId, tools, onToolsChange }: {
             </label>
             <div className="tools-row-actions">
               <button className="icon-button" onClick={() => (tool.type === "http" ? setHttpModal(tool) : setMcpModal(tool))} title={t("tools.edit")}><Pencil size={15} /></button>
-              <button className="icon-button danger-icon" onClick={() => setConfirmDelete(tool)} title={t("tools.delete")}><Trash2 size={15} /></button>
+              {!tool.managed && <button className="icon-button danger-icon" onClick={() => setConfirmDelete(tool)} title={t("tools.delete")}><Trash2 size={15} /></button>}
             </div>
           </div>
         ))}
@@ -87,5 +89,7 @@ export function AgentToolsTab({ agentId, tools, onToolsChange }: {
         onClose={() => setConfirmDelete(null)}
       />}
     </section>
+    <IntegrationCatalog agentId={agentId} tools={tools} onSaved={saved} onRemoved={(id) => onToolsChange(tools.filter((tool) => tool.id !== id))} onReview={setMcpModal} />
+    </>
   );
 }

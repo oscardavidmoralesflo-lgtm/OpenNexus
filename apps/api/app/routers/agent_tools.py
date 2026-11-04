@@ -10,13 +10,14 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from ..database import get_db
 from ..deps import get_current_user
-from ..models import AgentTool, User, now_utc
+from ..models import AgentTool, ManagedIntegration, User, now_utc
 from ..schemas_tools import AgentToolIn, AgentToolOut, HttpToolUpdate, McpTestIn, McpTestOut
 from ..security import decrypt_secret, encrypt_secret
+from ..services import phone_calls
 from ..services.tools.mcp_client import _flatten_exceptions, describe_mcp_error, discover_mcp_tools
 from .agents import _agent
 
@@ -44,6 +45,8 @@ def _check_name_free(db: Session, agent_id: uuid.UUID, name: str, exclude_id: uu
 def _out(tool: AgentTool) -> AgentToolOut:
     data = AgentToolOut.model_validate(tool)
     data.has_headers = bool(tool.encrypted_headers)
+    db = object_session(tool)
+    data.managed = bool(db and db.scalar(select(ManagedIntegration.id).where(ManagedIntegration.tool_id == tool.id)))
     return data
 
 
@@ -98,6 +101,7 @@ async def create_tool(
     db.add(tool)
     db.commit()
     db.refresh(tool)
+    phone_calls.refresh_lines_soon(db, agent_id=agent_id)
     return _out(tool)
 
 
@@ -111,6 +115,10 @@ async def update_tool(
 ):
     tool = _tool(db, user, agent_id, tool_id)
     updates = payload.model_dump(exclude_unset=True)
+    managed = db.scalar(select(ManagedIntegration.id).where(ManagedIntegration.tool_id == tool_id))
+    connection_changed = any(key in updates and updates[key] != getattr(tool, key) for key in ("url", "transport"))
+    if managed and (connection_changed or updates.get("headers") is not None):
+        raise HTTPException(409, "Managed connection credentials are configured in Settings → Integrations.")
     headers = updates.pop("headers", None)
     # The ellipsis sentinel tells "omitted" from "null"; HTTP rows ignore it.
     selection = updates.pop("enabled_tools", ...)
@@ -124,7 +132,7 @@ async def update_tool(
         setattr(tool, key, value)
     if headers is not None:
         tool.encrypted_headers = encrypt_secret(json.dumps(headers)) if headers else None
-    if tool.type == "mcp" and ({"url", "transport"} & updates.keys() or headers is not None):
+    if tool.type == "mcp" and (connection_changed or headers is not None):
         tool.cached_tools = await _discover_or_502(tool.url, tool.transport, _stored_headers(tool))
         tool.tools_cached_at = now_utc()
     if tool.type == "mcp":
@@ -132,14 +140,18 @@ async def update_tool(
         tool.enabled_tools = _prune_selection(tool.enabled_tools if selection is ... else selection, tool.cached_tools)
     db.commit()
     db.refresh(tool)
+    phone_calls.refresh_lines_soon(db, agent_id=agent_id)
     return _out(tool)
 
 
 @router.delete("/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_tool(agent_id: uuid.UUID, tool_id: uuid.UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     tool = _tool(db, user, agent_id, tool_id)
+    if db.scalar(select(ManagedIntegration.id).where(ManagedIntegration.tool_id == tool_id)):
+        raise HTTPException(409, "Disconnect this account from the integration catalog to revoke access.")
     db.delete(tool)
     db.commit()
+    phone_calls.refresh_lines_soon(db, agent_id=agent_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -151,6 +163,9 @@ async def test_mcp(
     url, transport, headers = payload.url, payload.transport, payload.headers
     if payload.tool_id:
         tool = _tool(db, user, agent_id, payload.tool_id)
+        managed = db.scalar(select(ManagedIntegration).where(ManagedIntegration.tool_id == tool.id))
+        if managed and (payload.url and payload.url != tool.url or payload.headers is not None):
+            raise HTTPException(409, "Managed connection credentials cannot be sent to another server.")
         url = url or tool.url
         transport = payload.transport if payload.url else tool.transport
         if headers is None:
@@ -158,6 +173,8 @@ async def test_mcp(
     if not url:
         raise HTTPException(status_code=422, detail="A server URL is required")
     tools = await _discover_or_502(url, transport, headers)
+    if payload.tool_id and managed:
+        tools = [entry for entry in tools if entry.get("name", "").upper().startswith(managed.toolkit.upper() + "_")]
     return McpTestOut(
         ok=True,
         tools=[

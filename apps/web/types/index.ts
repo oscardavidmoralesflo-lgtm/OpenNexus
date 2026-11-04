@@ -1,20 +1,91 @@
+export type TeamRole = "owner" | "admin" | "operator" | "viewer";
 export type User = {
   id: string;
   name: string;
   email: string;
-  role: string;
+  role: TeamRole;
+  two_factor_enabled?: boolean;
   agency: Agency;
 };
 
-export type Agency = { id: string; name: string; slug: string; brand_color: string; logo_url: string | null };
+export type Agency = { id: string; name: string; slug: string; brand_color: string; logo_url: string | null; billing_enabled?: boolean; require_two_factor?: boolean; ios_app_url?: string | null; android_app_url?: string | null };
 
-export type AgentSummary = { id: string; name: string; is_active: boolean };
+export type WorkspaceDomain = {
+  branded_url: string | null;
+  domain: string | null;
+  verified: boolean;
+  txt_host: string | null;
+  txt_value: string | null;
+  cname_target: string | null;
+  dns_ok: boolean;
+  ssl_ready: boolean;
+  primary_url: string;
+};
+
+export type McpAccess = { endpoint: string; tools: { name: string; description: string; writes: boolean }[] };
+export type McpToken = { id: string; name: string; prefix: string; read_only: boolean; created_by: string; created_at: string; last_used_at: string | null };
+export type McpTokenCreated = McpToken & { secret: string };
+export type McpActivity = { id: string; tool: string; ok: boolean; token_name: string | null; arguments: Record<string, unknown>; summary: string; created_at: string };
+
+export type SandboxAgent = { id: string; name: string; code: string; model: string; is_active: boolean; prospects: number; share_link: string | null };
+export type Sandbox = {
+  client_id: string;
+  name: string;
+  number: { kind: string; status: string; phone_number: string | null; display_name: string | null } | null;
+  agents: SandboxAgent[];
+};
+
+export type BillingPlan = { id: string; name: string; price_usd: number; max_clients: number | null };
+export type BillingOverview = {
+  enabled: boolean;
+  plans: BillingPlan[];
+  plan: BillingPlan | null;
+  subscribed: boolean;
+  subscription_status: string;
+  clients_used: number;
+  credit_balance: number;
+  platform_key: boolean;
+  own_key: boolean;
+  topup_amounts: number[];
+  topup_bonus_percent: number;
+  payments: boolean;
+  customer_id: string | null;
+};
+export type BillingSpendSide = { usd: number; replies: number; percent: number };
+export type BillingSpend = { days: number; platform: BillingSpendSide; own: BillingSpendSide };
+export type CreditTransaction = { id: string; kind: string; amount_usd: number; balance_after: number; description: string; created_at: string };
+
+export type AgencyMember = { id: string; name: string; email: string; role: TeamRole; two_factor_enabled: boolean; last_login_at: string | null; created_at: string; is_you: boolean };
+export type TeamInvitation = { id: string; email: string; role: TeamRole; invited_by: string | null; expires_at: string; created_at: string };
+export type TeamInvitationCreated = TeamInvitation & { link: string };
+export type AgencyTeam = { members: AgencyMember[]; invitations: TeamInvitation[]; require_two_factor: boolean; your_role: TeamRole };
+
+export type AuditEvent = { id: string; action: string; actor_email: string; method: string; path: string; status_code: number; target_id: string | null; ip: string; user_agent: string; created_at: string };
+export type AuditPage = { events: AuditEvent[]; has_more: boolean };
+
+export type TwoFactorStatus = { enabled: boolean; recovery_codes_left: number; required_by_agency: boolean };
+export type TwoFactorSetup = { secret: string; otpauth_uri: string; qr_svg: string };
+
+export type HumanizationConfig = {
+  split_replies: boolean;
+  split_max_parts: number;
+  typing_speed_cps: number;
+  style_mirror: boolean;
+  voice_replies: "off" | "mirror" | "always";
+  voice_model: string;
+  voice_name: string;
+};
+
+// "chat" answers messages; "voice" answers phone calls. Fixed when the agent is created.
+export type AgentKind = "chat" | "voice";
+export type AgentSummary = { id: string; name: string; is_active: boolean; kind?: AgentKind };
 
 export type IndustryLabel = { en: string; es: string };
 export type BusinessType = { code: string; label: IndustryLabel };
 export type Industry = { code: string; label: IndustryLabel; types: BusinessType[] };
 
 export type Client = {
+  is_sandbox?: boolean;
   id: string;
   name: string;
   industry: string;
@@ -49,6 +120,7 @@ export type ClientDomain = {
   verified: boolean;
   txt_host: string | null;
   txt_value: string | null;
+  cname_target: string | null;
 };
 
 export type Agent = {
@@ -82,6 +154,10 @@ export type Agent = {
   // client's timezone and the day is 0 (Monday) to 6 (Sunday).
   schedule_enabled: boolean;
   schedule_slots: ScheduleSlot[];
+  kind: AgentKind;
+  voice_id: string;
+  voice_name: string;
+  greeting: string; transfer_number: string | null; transfer_when: string;
   client: Client;
   created_at: string;
   updated_at: string;
@@ -103,6 +179,35 @@ export type Provider = {
 };
 
 export type ProviderTest = { ok: boolean; message: string; models: string[] };
+
+// Phone calls: the agency's accounts (ElevenLabs and its carriers) and the
+// lines its clients' agents answer.
+export type CallProvider = "elevenlabs" | "twilio" | "telnyx";
+export type CallAccount = { provider: CallProvider; configured: boolean; stored: boolean; source: "agency" | "deployment" | "none"; secret_hint: string; last_error: string | null };
+export type PhoneModel = { id: string; label: string; realtime: boolean };
+export type PhoneVoice = { voice_id: string; name: string; accent: string; gender: string; description: string; preview_url: string | null };
+export type CarrierNumber = { id: string; phone_number: string; name: string };
+export type PhoneLine = {
+  id: string; client_id: string; agent_id: string; label: string | null; phone_number: string;
+  provider: "twilio" | "telnyx"; provider_number_id: string | null;
+  status: "connected" | "disconnected" | "error"; is_enabled: boolean; last_error: string | null;
+  last_connected_at: string | null; created_at: string; updated_at: string;
+};
+// What a phone conversation adds: the call it was, once ElevenLabs reports it.
+export type PhoneCallInfo = { caller: string | null; started_at: string; ended_at: string | null; duration_seconds: number | null; cost_usd: number | null; summary: string | null };
+
+// A file the agent can send to a customer (product photo, catalog). Not
+// knowledge: only the name and the note on when to send it reach the model.
+export type MediaAsset = {
+  id: string;
+  name: string;
+  description: string;
+  kind: "image" | "file";
+  mime: string;
+  filename: string;
+  size_bytes: number;
+  created_at: string;
+};
 
 export type KnowledgeDocument = {
   id: string;
@@ -140,6 +245,7 @@ export type AgentTool = {
   // null: every cached tool is exposed; a list restricts the server to it.
   enabled_tools: string[] | null;
   has_headers: boolean;
+  managed?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -190,6 +296,7 @@ export type ConversationAcquisition = {
 };
 export type Conversation = {
   id: string;
+  phone_call?: PhoneCallInfo | null;
   client_id: string;
   agent_id: string;
   title: string;
@@ -443,8 +550,6 @@ export type PortalPublic = {
   agency_brand_color: string;
   agency_logo_url: string | null;
   client_logo_url: string | null;
-  ios_app_url?: string | null;
-  android_app_url?: string | null;
 };
 
 export type SocialProvider = "instagram" | "messenger";
@@ -516,7 +621,7 @@ export type Operations = { tz: string; bucket: string; totals: OpsMetrics; by_cl
 export type ReportFilters = { clients: { id: string; name: string }[]; agents: { id: string; name: string; client_id: string }[]; channels: string[]; models: string[] };
 
 export type CostReport = {
-  totals: { cost_usd: number; replies: number; conversations: number; input_tokens: number; output_tokens: number; avg_cost_per_reply_usd: number };
+  totals: { cost_usd: number; unpriced_replies?: number; replies: number; conversations: number; input_tokens: number; output_tokens: number; avg_cost_per_reply_usd: number; estimated_replies: number };
   by_client: ReportGroup[];
   by_agent: ReportGroup[];
   by_model: ReportGroup[];
@@ -542,11 +647,12 @@ export type ReportReply = {
   reasoning_tokens: number;
   cost_usd: number;
   estimated: boolean;
+  cost_unknown?: boolean;
   duration_ms: number | null;
   tools: number;
   tool_errors: number;
   // "reply", or "summary" for a conversation summary a person asked for.
-  purpose?: "reply" | "summary";
+  purpose?: "reply" | "summary" | "call";
 };
 
 /** A detail a contact can hold: the built-in name, email and phone, or a
@@ -627,3 +733,51 @@ export type ConversationReportRow = {
 };
 export type ConversationReportPage = { items: ConversationReportRow[]; total: number; summary: OpsMetrics };
 export type ConversationFacets = { with_ad: number; without_ad: number; facets: { key: string; values: { value: string; count: number }[] }[] };
+
+export type AgentTestCase = {
+  id: string;
+  question: string;
+  expectation: string;
+  last_answer: string | null;
+  last_passed: boolean | null;
+  last_score: number | null;
+  last_reason: string | null;
+  last_run_at: string | null;
+  created_at: string;
+};
+
+export type AgentTestSuite = { cases: AgentTestCase[]; pass_score: number; passed: number; failed: number; not_run: number };
+
+export type BookingSettings = {
+  enabled: boolean; duration_minutes: number; slots: ScheduleSlot[]; capacity: number; min_notice_minutes: number;
+  max_days_ahead: number; location: string; reminder_enabled: boolean; reminder_hours: number;
+};
+export type AppointmentStatus = "confirmed" | "cancelled" | "completed" | "no_show";
+export type Appointment = {
+  id: string; name: string; phone: string; notes: string; starts_at: string; ends_at: string; status: AppointmentStatus;
+  source: "agent" | "team"; agent_name: string | null; conversation_id: string | null; reminder_due_at: string | null;
+  reminder_sent_at: string | null; reminder_error: string | null; created_at: string;
+};
+
+export type PipelineStage = "new" | "qualified" | "booked" | "won" | "lost";
+export type PipelineCard = {
+  id: string; name: string; phone: string | null; email: string | null; stage: PipelineStage; deal_value: number | null;
+  stage_changed_at: string | null; last_conversation_id: string | null; last_activity_at: string; last_channel: string | null;
+  tags: { name: string; color: string }[];
+};
+export type PipelineBoard = { enabled: boolean; stages: { stage: PipelineStage; total: number; value: number; contacts: PipelineCard[] }[] };
+
+export type CampaignStatus = "draft" | "scheduled" | "sending" | "done" | "cancelled";
+export type CampaignStats = { total: number; pending: number; sent: number; failed: number; delivered: number; read: number; replied: number };
+export type CampaignAudience = { tag_ids?: string[]; stages?: PipelineStage[] };
+export type Campaign = {
+  id: string; name: string; channel_id: string | null; channel_label: string;
+  template_name: string; template_language: string; variables: Record<string, string>; header_value: string;
+  audience: CampaignAudience; status: CampaignStatus;
+  scheduled_at: string | null; started_at: string | null; finished_at: string | null;
+  last_error: string | null; created_at: string; stats: CampaignStats;
+};
+export type CampaignRecipient = {
+  id: string; name: string; phone: string; status: "pending" | "sent" | "failed"; error: string | null;
+  conversation_id: string | null; sent_at: string | null;
+};

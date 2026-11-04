@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Cookie, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -27,7 +27,10 @@ from ..services.attachments import (
     store_attachment,
 )
 from ..services.tools import run_completion
+from ..services.booking import BookingChanges, build_booking_specs
+from ..services.pipeline import StageChanges, build_stage_spec
 from ..services.capture import build_capture_spec, capture_context, field_definitions
+from ..services.media_library import build_media_spec, media_prompt
 from ..services.knowledge import build_system_prompt, llm_turns, retrieve_knowledge
 from ..services.operator_media import store_operator_media_reply
 from ..services.providers import resolve_agent_credentials
@@ -268,11 +271,24 @@ async def _generate_reply(
     capture_block = capture_context(agent, refreshed, definitions, agent.prompt_language)
     system_content = build_system_prompt(agent, knowledge.text, capture_block)
     capture_spec = build_capture_spec(agent, refreshed, definitions, [])
+    # The files the agent may send go out here too, so the library can be
+    # rehearsed before a customer sees it.
+    media_spec = build_media_spec(db, agent)
+    if media_spec:
+        system_content += "\n\n" + media_prompt(agent)
+    # The appointment book is rehearsed too: real free times, but nothing is
+    # booked from the playground.
+    booking_specs, booking_rules = build_booking_specs(db, agent, refreshed, BookingChanges())
+    if booking_rules:
+        system_content += "\n\n" + booking_rules
+    stage_spec, stage_rules = build_stage_spec(db, agent, refreshed, StageChanges())
+    if stage_rules:
+        system_content += "\n\n" + stage_rules
     messages = [{"role": "system", "content": system_content}, *history]
     base_url, api_key = credentials
     completion = await run_completion(
         db, agent, base_url, api_key, messages, temperature=agent.temperature, max_tokens=agent.max_tokens,
-        extra_specs=[capture_spec] if capture_spec else None,
+        extra_specs=[*(spec for spec in (capture_spec, media_spec) if spec), *booking_specs, *([stage_spec] if stage_spec else [])] or None,
     )
     note_reply(conversation)
     reply = Message(
@@ -382,10 +398,22 @@ def get_attachment(
     conversation_id: uuid.UUID,
     attachment_id: uuid.UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    access_token: str | None = Cookie(default=None),
 ):
-    conversation = _conversation(db, user, conversation_id)
-    return attachment_response(conversation_attachment(db, conversation, attachment_id))
+    # Authenticate and read in one worker invocation. A separate sync auth
+    # dependency can retain a connection while every worker waits for one.
+    try:
+        user = get_current_user(access_token=access_token, db=db)
+        # A download needs ownership and one file, not the conversation history.
+        conversation = db.scalar(select(Conversation).where(
+            Conversation.id == conversation_id, Conversation.agency_id == user.agency_id,
+        ))
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        return attachment_response(conversation_attachment(db, conversation, attachment_id))
+    finally:
+        # The response owns the bytes; slow readers must not retain a connection.
+        db.close()
 
 
 @router.patch("/{conversation_id}/mode", response_model=ConversationDetail)

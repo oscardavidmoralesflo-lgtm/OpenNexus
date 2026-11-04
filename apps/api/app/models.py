@@ -33,9 +33,31 @@ class Agency(Base):
     brand_color: Mapped[str] = mapped_column(String(20), default="#075985")
     logo_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     logo_mime: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # The agency's own domain for the whole workspace: sign-in, dashboard and
+    # client portals. Verified through a DNS TXT challenge like a portal domain;
+    # only a verified one is routed and gets an on-demand certificate.
+    workspace_domain: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    workspace_domain_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    workspace_domain_token: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # Billing (only read when the deployment turns billing on). The plan the
+    # subscription pays for, its state as the payment provider reports it, and
+    # the AI credit the platform's key draws from.
+    plan: Mapped[str] = mapped_column(String(40), default="", server_default="")
+    subscription_status: Mapped[str] = mapped_column(String(30), default="none", server_default="none")
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    credit_balance: Mapped[float] = mapped_column(Numeric(14, 6), default=0, server_default="0")
+    # Every member must set up two-step verification before using the dashboard.
+    require_two_factor: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     users: Mapped[list["User"]] = relationship(back_populates="agency", cascade="all, delete-orphan")
+
+    @property
+    def billing_enabled(self) -> bool:
+        from .config import get_settings
+
+        return get_settings().billing_enabled
 
     @property
     def logo_url(self) -> str | None:
@@ -51,10 +73,28 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(160))
     email: Mapped[str] = mapped_column(String(320), index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[str] = mapped_column(String(30), default="admin")
+    # owner, admin, operator or viewer (see app.services.team_roles).
+    role: Mapped[str] = mapped_column(String(30), default="owner")
+    # Two-step verification (TOTP). The secret is encrypted like the AI keys;
+    # it is stored while being set up and only counts once ``totp_enabled``.
+    totp_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # The last time step accepted, so a code cannot be replayed.
+    totp_last_step: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # SHA-256 of the unused one-time recovery codes.
+    recovery_codes: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
     agency: Mapped[Agency] = relationship(back_populates="users")
+
+    @property
+    def two_factor_enabled(self) -> bool:
+        return self.totp_enabled
+
+    @property
+    def recovery_codes_left(self) -> int:
+        return len(self.recovery_codes or [])
 
 
 class Client(Base):
@@ -73,6 +113,10 @@ class Client(Base):
     # the client tells the time in it; the prompt reads it from here.
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The agency's sandbox: one WhatsApp number where prospects try the agents
+    # built for them, each reached by its code. One per agency, made on demand,
+    # and never counted as a client of the plan.
+    is_sandbox: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     # Optional per-client logo, shown in the widget and portal (falls back to
     # the agency logo). Bytes stored in Postgres like the agency logo.
     logo_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
@@ -85,6 +129,8 @@ class Client(Base):
     portal_domain: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     portal_domain_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     portal_domain_token: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # The sales pipeline: agents move contacts through its stages.
+    pipeline_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
@@ -137,6 +183,8 @@ class Agent(Base):
     agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
     client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(180))
+    # On the sandbox number, the code a prospect sends to talk to this agent.
+    sandbox_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     # What this agent does: its job, tasks and rules, in prose.
     instructions: Mapped[str] = mapped_column(Text, default="")
     personality: Mapped[str] = mapped_column(Text, default="")
@@ -186,6 +234,23 @@ class Agent(Base):
     phone_handover_minutes: Mapped[int] = mapped_column(Integer, default=10, server_default="10")
     reply_delay_min_seconds: Mapped[int] = mapped_column(Integer, default=6, server_default="6")
     reply_delay_max_seconds: Mapped[int] = mapped_column(Integer, default=9, server_default="9")
+    # Humanized delivery on WhatsApp (see services/humanize.py). It runs on the
+    # delayed reply path, so it needs a reply delay above zero.
+    # Long replies go out as up to ``split_max_parts`` short messages.
+    split_replies: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    split_max_parts: Mapped[int] = mapped_column(Integer, default=3, server_default="3")
+    # "Typing…" lasts as long as a person takes to type each message, at this
+    # many characters per second (0: a natural default).
+    typing_speed_cps: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Match the customer's way of writing: formality, length, emojis.
+    style_mirror: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Voice notes: "off", "mirror" (when the customer sent one) or "always".
+    voice_replies: Mapped[str] = mapped_column(String(10), default="off", server_default="off")
+    voice_model: Mapped[str] = mapped_column(String(180), default="", server_default="")
+    # The TTS voice for voice notes (e.g. "nova"). Its API field stays
+    # ``voice_name`` on the humanization routes; the column was renamed so the
+    # phone agents' ``voice_name`` could take that name.
+    voice_note_voice: Mapped[str] = mapped_column(String(60), default="", server_default="")
     # Whether the agent may resolve a conversation itself once the contact's
     # request is settled, instead of leaving it open until it goes idle.
     resolve_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
@@ -224,12 +289,24 @@ class Agent(Base):
     # Embedding model for this agent's knowledge base. Vectors from different
     # models are not comparable, so chunks record theirs and a change reindexes.
     embedding_model: Mapped[str] = mapped_column(String(180), default="openai/text-embedding-3-small", server_default="openai/text-embedding-3-small")
+    # What the agent answers, chosen when it is created: "chat" (messages on
+    # WhatsApp, Instagram, Messenger, the web) or "voice" (phone calls). A voice
+    # agent speaks with ``voice_id`` and opens every call with ``greeting``;
+    # it puts the caller through to ``transfer_number`` (E.164) when
+    # ``transfer_when`` says so, or tells them someone will call back.
+    kind: Mapped[str] = mapped_column(String(20), default="chat", server_default="chat")
+    voice_id: Mapped[str] = mapped_column(String(80), default="", server_default="")
+    voice_name: Mapped[str] = mapped_column(String(180), default="", server_default="")
+    greeting: Mapped[str] = mapped_column(Text, default="", server_default="")
+    transfer_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    transfer_when: Mapped[str] = mapped_column(Text, default="", server_default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
     client: Mapped[Client] = relationship(back_populates="agents")
     documents: Mapped[list["KnowledgeDocument"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    media_assets: Mapped[list["AgentMediaAsset"]] = relationship(back_populates="agent", cascade="all, delete-orphan", order_by="AgentMediaAsset.created_at")
     qa_pairs: Mapped[list["AgentQA"]] = relationship(back_populates="agent", cascade="all, delete-orphan", order_by="AgentQA.position")
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
     whatsapp_channels: Mapped[list["WhatsAppChannel"]] = relationship(back_populates="agent")
@@ -300,6 +377,23 @@ class AgentTool(Base):
     agent: Mapped[Agent] = relationship(back_populates="tools")
 
 
+class ManagedIntegration(Base):
+    """An agent-scoped external account. OAuth tokens stay at Composio."""
+
+    __tablename__ = "managed_integrations"
+    __table_args__ = (UniqueConstraint("agent_id", "toolkit", name="uq_managed_integrations_agent_toolkit"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    toolkit: Mapped[str] = mapped_column(String(100))
+    auth_config_id: Mapped[str] = mapped_column(String(180))
+    account_id: Mapped[str] = mapped_column(String(180))
+    status: Mapped[str] = mapped_column(String(30), default="pending")
+    tool_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agent_tools.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
 class WhatsAppChannel(Base):
     """A WhatsApp number linked by QR. A client can have several, each bound to
     an agent (the same agent may answer more than one)."""
@@ -366,6 +460,97 @@ class WhatsAppCloudChannel(Base):
     client: Mapped[Client] = relationship(back_populates="whatsapp_cloud_channels")
     agent: Mapped[Agent] = relationship(back_populates="whatsapp_cloud_channels")
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="whatsapp_cloud_channel")
+
+
+class CallAccount(Base):
+    """An agency's account at a service phone calls go through: ElevenLabs
+    (voice, speech recognition, turn taking) or a phone carrier (Twilio,
+    Telnyx) whose numbers ring the agent. One per provider per agency, bring
+    your own key; the secret is a JSON object encrypted like provider keys."""
+
+    __tablename__ = "call_accounts"
+    __table_args__ = (UniqueConstraint("agency_id", "provider", name="uq_call_accounts_agency_provider"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(20))
+    # Names the account in URLs a provider calls back, without revealing the row id.
+    public_id: Mapped[str] = mapped_column(String(64), default=new_public_id, unique=True)
+    encrypted_secret: Mapped[str] = mapped_column(Text)
+    secret_hint: Mapped[str] = mapped_column(String(40), default="", server_default="")
+    # ElevenLabs only: the workspace webhook that reports finished calls, and
+    # the secret its requests are signed with.
+    webhook_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    encrypted_webhook_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Where that webhook points. ElevenLabs cannot move a webhook, so a new
+    # address (another domain, a new tunnel) gets a new one.
+    webhook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # ElevenLabs only: the workspace secret its agents send when they call
+    # back during a call (who is calling, a tool), and the hash it is checked
+    # against. The value itself is only ever stored at ElevenLabs.
+    tool_secret_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    tool_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class PhoneChannel(Base):
+    """A phone number of the client that a voice agent answers. The number
+    lives at the agency's carrier; ElevenLabs takes its calls with the agent's
+    voice and calls OpenLivery back for who is calling and for its tools."""
+
+    __tablename__ = "phone_channels"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="RESTRICT"), index=True)
+    # Names the line in the URLs ElevenLabs calls during a call.
+    public_id: Mapped[str] = mapped_column(String(64), default=new_public_id, unique=True)
+    label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    phone_number: Mapped[str] = mapped_column(String(32))
+    provider: Mapped[str] = mapped_column(String(20))
+    provider_number_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    elevenlabs_agent_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    elevenlabs_phone_number_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # The line's tools at ElevenLabs, by name: {"id": ..., "hash": ...}, the
+    # hash of what was last written so an unchanged tool is not written again.
+    elevenlabs_tools: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    status: Mapped[str] = mapped_column(String(30), default="disconnected")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    client: Mapped[Client] = relationship()
+    agent: Mapped[Agent] = relationship()
+
+
+class PhoneCall(Base):
+    """One call on a phone line and the conversation it became. Filled while
+    the call runs and completed by the report ElevenLabs sends at hang-up."""
+
+    __tablename__ = "phone_calls"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), unique=True)
+    phone_channel_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("phone_channels.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # ElevenLabs' conversation id: the same on every turn of the call.
+    external_call_id: Mapped[str] = mapped_column(String(80), unique=True)
+    caller: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # What ElevenLabs charged for the call, in its credits.
+    # What the call cost in USD as ElevenLabs reports it: the voice's minutes plus the model.
+    cost_usd: Mapped[float | None] = mapped_column(Numeric(12, 6), nullable=True)
+    end_reason: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class TemplateWebhook(Base):
@@ -482,6 +667,34 @@ class KnowledgeChunk(Base):
     document: Mapped[KnowledgeDocument] = relationship(back_populates="chunks")
 
 
+class AgentMediaAsset(Base):
+    """A file the agent can send to a customer: a product photo, a catalog, a
+    price list. Not knowledge: nothing here is read or indexed. The model sees
+    only the name and the description of when to send it, and the bytes leave
+    as a message attachment through the conversation's channel.
+
+    Images are normalized on upload (resized, re-encoded) so one stored file is
+    accepted by every channel. Bytes live in Postgres like KnowledgeDocument;
+    the column is deferred so listing the library never loads them.
+    """
+
+    __tablename__ = "agent_media_assets"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    description: Mapped[str] = mapped_column(Text, default="", server_default="")
+    kind: Mapped[str] = mapped_column(String(20))  # image | file
+    mime: Mapped[str] = mapped_column(String(100))
+    filename: Mapped[str] = mapped_column(String(255))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    data: Mapped[bytes] = mapped_column(LargeBinary, deferred=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    agent: Mapped[Agent] = relationship(back_populates="media_assets")
+
+
 class UsageRecord(Base):
     __tablename__ = "usage_records"
 
@@ -566,6 +779,12 @@ class Contact(Base):
     # A blocked contact talks to a wall: their messages are stored but nobody
     # answers, nothing rings, and their conversations leave the inboxes.
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Where the contact stands in the client's sales pipeline
+    # (services.pipeline.STAGES); None reads as "new".
+    stage: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # What the deal is worth, in the client's own currency.
+    deal_value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
@@ -684,6 +903,9 @@ class Conversation(Base):
     widget_channel_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("widget_channels.id", ondelete="CASCADE"), nullable=True, index=True
     )
+    phone_channel_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("phone_channels.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     external_chat_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     contact_name: Mapped[str | None] = mapped_column(String(180), nullable=True)
     contact_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -753,6 +975,8 @@ class Conversation(Base):
     whatsapp_cloud_channel: Mapped[WhatsAppCloudChannel | None] = relationship(back_populates="conversations")
     widget_channel: Mapped["WidgetChannel | None"] = relationship(back_populates="conversations")
     social_channel: Mapped["SocialChannel | None"] = relationship()
+    phone_channel: Mapped["PhoneChannel | None"] = relationship()
+    phone_call: Mapped["PhoneCall | None"] = relationship(uselist=False, viewonly=True)
     messages: Mapped[list["Message"]] = relationship(back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at")
 
     @property
@@ -1181,3 +1405,270 @@ class SocialHistoryImport(Base):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class McpToken(Base):
+    """A personal token an external AI agent (Claude Code, Cursor, Codex…) uses
+    to reach the workspace over MCP. It acts as the person who created it.
+
+    Only a SHA-256 of the secret is stored; the secret is shown once."""
+
+    __tablename__ = "mcp_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # The first characters of the secret, so a person can tell tokens apart.
+    prefix: Mapped[str] = mapped_column(String(16))
+    # Read-only tokens may list and read, never change anything or spend credit.
+    read_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[User] = relationship()
+
+
+class McpActivity(Base):
+    """One tool call an external agent made: when, with which token, what it changed."""
+
+    __tablename__ = "mcp_activity"
+    __table_args__ = (Index("ix_mcp_activity_agency_created", "agency_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"))
+    token_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("mcp_tokens.id", ondelete="SET NULL"), nullable=True, index=True)
+    tool: Mapped[str] = mapped_column(String(80))
+    ok: Mapped[bool] = mapped_column(Boolean, default=True)
+    # A short description of the call's arguments and of what came of it.
+    arguments: Mapped[dict] = mapped_column(JSON, default=dict)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    token: Mapped["McpToken | None"] = relationship()
+
+
+class SandboxSession(Base):
+    """Which sandbox agent a chat on the sandbox number is talking to.
+
+    Kept per chat rather than per conversation, so a prospect who comes back
+    after their case was resolved still reaches the agent they chose."""
+
+    __tablename__ = "sandbox_sessions"
+    __table_args__ = (UniqueConstraint("client_id", "external_chat_id", name="uq_sandbox_sessions_chat"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    external_chat_id: Mapped[str] = mapped_column(String(255))
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    agent: Mapped[Agent] = relationship()
+
+
+class CreditTransaction(Base):
+    """One movement of an agency's AI credit: a top-up, its bonus, a reply the
+    platform's key paid for, or a manual adjustment. ``amount_usd`` is signed."""
+
+    __tablename__ = "credit_transactions"
+    __table_args__ = (
+        Index("ix_credit_transactions_agency_created", "agency_id", "created_at"),
+        # A payment or a usage record is applied once, however often it is reported.
+        UniqueConstraint("kind", "reference", name="uq_credit_transactions_reference"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    amount_usd: Mapped[float] = mapped_column(Numeric(14, 6))
+    balance_after: Mapped[float] = mapped_column(Numeric(14, 6))
+    description: Mapped[str] = mapped_column(String(240), default="")
+    reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    usage_record_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("usage_records.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    usage_record: Mapped["UsageRecord | None"] = relationship(lazy="noload")
+
+
+class Invitation(Base):
+    """An invitation to join the agency's team with a role. The link carries a
+    secret; only its SHA-256 is stored. It works once and expires."""
+
+    __tablename__ = "invitations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    email: Mapped[str] = mapped_column(String(320))
+    role: Mapped[str] = mapped_column(String(30))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    invited_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+    agency: Mapped[Agency] = relationship()
+    invited_by: Mapped["User | None"] = relationship()
+
+
+class AuditEvent(Base):
+    """One change a signed-in person made in the agency's dashboard, kept as
+    a record of who did what and when. Written for every successful write to
+    the dashboard API and for each sign-in; never edited afterwards."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (Index("ix_audit_events_agency_created", "agency_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"))
+    # Kept when the person is removed later: the email is a snapshot.
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    actor_email: Mapped[str] = mapped_column(String(320), default="")
+    # A dotted name such as ``agents.update`` or ``auth.sign_in``.
+    action: Mapped[str] = mapped_column(String(120))
+    method: Mapped[str] = mapped_column(String(10), default="")
+    path: Mapped[str] = mapped_column(String(500), default="")
+    status_code: Mapped[int] = mapped_column(Integer, default=0)
+    # The first id in the path, when there is one: the thing the change touched.
+    target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ip: Mapped[str] = mapped_column(String(64), default="")
+    user_agent: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class AgentTestCase(Base):
+    """A question the agency asks an agent to check its answers, with what a
+    good answer must do. The quality lab runs it against the agent's current
+    setup and keeps the latest verdict on the case itself."""
+
+    __tablename__ = "agent_test_cases"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    question: Mapped[str] = mapped_column(Text)
+    # In plain words: what the answer must include, or must not say.
+    expectation: Mapped[str] = mapped_column(Text, default="")
+    last_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_passed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    last_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class BookingSettings(Base):
+    """A client's appointment book: the weekly hours appointments can start
+    in, how long each one lasts, and the reminder sent before it. With
+    ``enabled`` on, every agent of the client can offer times and book them."""
+
+    __tablename__ = "booking_settings"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    # Weekly hours, the same slot shape as an agent's schedule
+    # (services.availability), read in the client's timezone.
+    slots: Mapped[list] = mapped_column(JSON, default=list)
+    # How many appointments may share the same time (people who attend).
+    capacity: Mapped[int] = mapped_column(Integer, default=1)
+    min_notice_minutes: Mapped[int] = mapped_column(Integer, default=120)
+    max_days_ahead: Mapped[int] = mapped_column(Integer, default=30)
+    # Address or instructions the confirmation and the reminder carry.
+    location: Mapped[str] = mapped_column(Text, default="")
+    reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    reminder_hours: Mapped[int] = mapped_column(Integer, default=24)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class Appointment(Base):
+    """One booked time with a client's business, made by an agent in a
+    conversation or by the team from the dashboard."""
+
+    __tablename__ = "appointments"
+    __table_args__ = (Index("ix_appointments_client_starts", "client_id", "starts_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"))
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(180), default="")
+    phone: Mapped[str] = mapped_column(String(40), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # confirmed | cancelled | completed | no_show
+    status: Mapped[str] = mapped_column(String(20), default="confirmed")
+    # agent | team
+    source: Mapped[str] = mapped_column(String(20), default="agent")
+    # When the reminder goes out; cleared once it is sent or no longer due.
+    reminder_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reminder_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    conversation: Mapped["Conversation | None"] = relationship()
+
+
+class Campaign(Base):
+    """A WhatsApp broadcast: one approved template sent to a filtered list of
+    a client's contacts, from one WhatsApp API number. Replies land in each
+    contact's conversation, where the number's agent answers them."""
+
+    __tablename__ = "campaigns"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    whatsapp_cloud_channel_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("whatsapp_cloud_channels.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    template_name: Mapped[str] = mapped_column(String(512))
+    template_language: Mapped[str] = mapped_column(String(10))
+    # Body variable -> value; a value may hold {name} or {first_name}.
+    variables: Mapped[dict] = mapped_column(JSON, default=dict)
+    header_value: Mapped[str] = mapped_column(Text, default="")
+    # Who receives it: {"tag_ids": [...], "stages": [...]}; empty lists mean everyone.
+    audience: Mapped[dict] = mapped_column(JSON, default=dict)
+    # draft | scheduled | sending | done | cancelled
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    client: Mapped[Client] = relationship()
+    channel: Mapped["WhatsAppCloudChannel | None"] = relationship()
+
+
+class CampaignRecipient(Base):
+    """One contact a campaign goes to, and how that send went."""
+
+    __tablename__ = "campaign_recipients"
+    __table_args__ = (UniqueConstraint("campaign_id", "contact_id", name="uq_campaign_recipients_contact"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"), index=True)
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True)
+    phone: Mapped[str] = mapped_column(String(40))
+    name: Mapped[str] = mapped_column(String(180), default="")
+    # pending | sent | failed
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
+    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

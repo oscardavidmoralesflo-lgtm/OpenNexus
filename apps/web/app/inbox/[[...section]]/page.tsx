@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Images, Inbox as InboxIcon, LoaderCircle, Search, UserRound } from "lucide-react";
+import { CallHeader } from "@/components/call-header";
 import { PageHead } from "@/components/ui";
 import { AttachButton, MessageAttachments, PendingAttachment, RecordButton, useFileDrop, type GalleryImage } from "@/components/attachments";
 import { MediaPanel } from "@/components/media-panel";
@@ -298,13 +299,14 @@ export default function InboxPage() {
               </div>
             </header>
             <div className="inbox-messages" ref={messagesRef}>
+              <CallHeader call={selected.phone_call} />
               {selected.messages?.map((message, index) => {
                 const prev = index > 0 ? selected.messages![index - 1] : null;
                 const grouped = Boolean(prev && prev.role === message.role && prev.sender_name === message.sender_name);
                 const stamp = formatTime(message.created_at, lang);
                 const hasAudio = message.attachments?.some((a) => a.kind === "audio");
                 return (
-                  <div key={message.id} className={`inbox-message ${message.role}${grouped ? " grouped" : ""}`}>
+                  <div key={message.id} className={`inbox-message ${message.role}${message.role === "assistant" ? " mine" : ""}${grouped ? " grouped" : ""}`}>
                     {!grouped && <small>{message.sender_name || (message.role === "assistant" ? t("inbox.senderAgent") : t("inbox.senderVisitor"))}</small>}
                     <MessageAttachments attachments={message.attachments} urlFor={attachmentUrl} gallery={gallery} stamp={stamp} />
                     {message.content && <p><QuotedSnippet messages={selected.messages ?? []} quotedId={message.quoted_message_id} /><RichText text={message.content} /><time className="msg-time">{stamp}{message.role === "assistant" && isSocialChannel(selected.channel) && <DeliveryTicks status={message.delivery_status} error={message.delivery_error} />}</time></p>}

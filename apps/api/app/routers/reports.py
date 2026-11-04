@@ -10,7 +10,7 @@ flagged as estimated.
 import csv
 import io
 import uuid
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -70,7 +70,8 @@ def _safe_tz(tz: str | None) -> str:
 
 class Filters:
     def __init__(self, agency_id: uuid.UUID, date_from: date, date_to: date,
-                 client_id: uuid.UUID | None, agent_id: uuid.UUID | None, model: str | None, q: str | None) -> None:
+                 client_id: uuid.UUID | None, agent_id: uuid.UUID | None, model: str | None, q: str | None,
+                 tz: str | None = None) -> None:
         if date_to < date_from:
             date_from, date_to = date_to, date_from
         if (date_to - date_from).days > MAX_RANGE_DAYS:
@@ -82,12 +83,15 @@ class Filters:
         self.agent_id = agent_id
         self.model = (model or "").strip()[:180] or None
         self.q = (q or "").strip()[:120]
+        # The range is in the viewer's days: cut in UTC, today would end hours
+        # early west of Greenwich and the evening's replies would vanish.
+        self.zone = ZoneInfo(_safe_tz(tz))
 
     def apply(self, query):
         query = query.where(
             UsageRecord.agency_id == self.agency_id,
-            UsageRecord.created_at >= datetime.combine(self.date_from, time.min, tzinfo=timezone.utc),
-            UsageRecord.created_at < datetime.combine(self.date_to + timedelta(days=1), time.min, tzinfo=timezone.utc),
+            UsageRecord.created_at >= datetime.combine(self.date_from, time.min, tzinfo=self.zone),
+            UsageRecord.created_at < datetime.combine(self.date_to + timedelta(days=1), time.min, tzinfo=self.zone),
         )
         if self.client_id:
             query = query.where(Conversation.client_id == self.client_id)
@@ -120,8 +124,8 @@ _AGGREGATES = (
     func.coalesce(func.sum(UsageRecord.input_tokens), 0),
     func.coalesce(func.sum(UsageRecord.output_tokens), 0),
     func.sum(UsageRecord.cost_usd),
-    func.sum(UsageRecord.input_tokens).filter(UsageRecord.cost_usd.is_(None)),
-    func.sum(UsageRecord.output_tokens).filter(UsageRecord.cost_usd.is_(None)),
+    func.sum(UsageRecord.input_tokens).filter(UsageRecord.cost_usd.is_(None), UsageRecord.provider == "openrouter"),
+    func.sum(UsageRecord.output_tokens).filter(UsageRecord.cost_usd.is_(None), UsageRecord.provider == "openrouter"),
 )
 
 
@@ -162,13 +166,18 @@ def cost_report(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    filters = Filters(user.agency_id, date_from, date_to, client_id, agent_id, model, None)
+    filters = Filters(user.agency_id, date_from, date_to, client_id, agent_id, model, None, tz)
     zone = _safe_tz(tz)
 
     by_model = _fold(_grouped(db, filters, UsageRecord.model), 1, lambda key: (key[0], key[0]))
     replies = sum(entry["replies"] for entry in by_model)
     cost = sum((Decimal(str(entry["cost_usd"])) for entry in by_model), Decimal(0))
     conversations = db.scalar(filters.apply(_joined(select(func.count(func.distinct(UsageRecord.conversation_id)))))) or 0
+    unpriced = db.scalar(filters.apply(_joined(select(func.count(UsageRecord.id)))).where(
+        UsageRecord.cost_usd.is_(None), UsageRecord.provider != "openrouter",
+    )) or 0
+    priced_replies = replies - unpriced
+    estimated = db.scalar(filters.apply(_joined(select(func.count(UsageRecord.id)).where(UsageRecord.cost_usd.is_(None))))) or 0
 
     days: dict = {}
     for row in _grouped(db, filters, cast(func.timezone(zone, UsageRecord.created_at), Date)):
@@ -180,11 +189,13 @@ def cost_report(
     return {
         "totals": {
             "cost_usd": _money(cost),
+            "unpriced_replies": int(unpriced),
             "replies": replies,
             "conversations": int(conversations),
             "input_tokens": sum(entry["input_tokens"] for entry in by_model),
             "output_tokens": sum(entry["output_tokens"] for entry in by_model),
-            "avg_cost_per_reply_usd": _money(cost / replies) if replies else 0.0,
+            "avg_cost_per_reply_usd": _money(cost / priced_replies) if priced_replies else 0.0,
+            "estimated_replies": int(estimated),
         },
         "by_client": _fold(_grouped(db, filters, Conversation.client_id, Client.name), 2,
                            lambda key: (str(key[0]) if key[0] else None, key[1] or "")),
@@ -197,18 +208,41 @@ def cost_report(
     }
 
 
-def _replies_query(filters: Filters):
+# What the reply list can be ordered by. A reply that reported no cost has
+# its cost estimated afterwards, so it sorts with the ones that cost nothing.
+REPLY_SORTS = {
+    "created_at": UsageRecord.created_at,
+    "contact": Conversation.contact_name,
+    "client": Client.name,
+    "agent": Agent.name,
+    "channel": Conversation.channel,
+    "model": UsageRecord.model,
+    "served_by": UsageRecord.served_by,
+    "duration_ms": UsageRecord.duration_ms,
+    "input_tokens": UsageRecord.input_tokens,
+    "output_tokens": UsageRecord.output_tokens,
+    "cost_usd": UsageRecord.cost_usd,
+}
+
+
+def _replies_query(filters: Filters, sort: str | None = None, order: str | None = None):
     query = _joined(select(
         UsageRecord, Conversation.contact_name, Conversation.channel, Conversation.client_id,
         Client.name, Agent.name, Message.tool_calls,
     )).outerjoin(Message, Message.id == UsageRecord.message_id)
-    return filters.apply(query).order_by(UsageRecord.created_at.desc())
+    column = REPLY_SORTS.get(sort or "", UsageRecord.created_at)
+    if order == "asc":
+        return filters.apply(query).order_by(column.asc().nulls_last(), UsageRecord.id.asc())
+    return filters.apply(query).order_by(column.desc().nulls_last(), UsageRecord.id.desc())
 
 
 def _reply(row) -> dict:
     record, contact_name, channel, client_id, client_name, agent_name, tool_calls = row
+    cost_unknown = record.cost_usd is None and record.provider != "openrouter"
     if record.cost_usd is not None:
         cost, estimated = Decimal(record.cost_usd), False
+    elif cost_unknown:
+        cost, estimated = Decimal(0), False
     else:
         cost, estimated = _estimated_cost(record.model, record.input_tokens, record.output_tokens), True
     calls = tool_calls or []
@@ -229,6 +263,7 @@ def _reply(row) -> dict:
         "cached_tokens": record.cached_tokens,
         "reasoning_tokens": record.reasoning_tokens,
         "cost_usd": _money(cost),
+        "cost_unknown": cost_unknown,
         "estimated": estimated,
         "duration_ms": record.duration_ms,
         "tools": len(calls),
@@ -246,15 +281,20 @@ def replies(
     model: str | None = None,
     q: str | None = None,
     format: str | None = None,
+    sort: str | None = None,
+    order: str | None = None,
     limit: int = Query(default=25, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    tz: str | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """One line per reply, newest first; ``format=csv`` downloads the whole
-    range (up to MAX_EXPORT_ROWS)."""
-    filters = Filters(user.agency_id, date_from, date_to, client_id, agent_id, model, q)
-    query = _replies_query(filters)
+    """One line per reply, newest first unless ``sort`` (a key of
+    ``REPLY_SORTS``) and ``order`` (``asc`` or ``desc``) say otherwise;
+    ``format=csv`` downloads the whole range (up to MAX_EXPORT_ROWS) in the
+    same order."""
+    filters = Filters(user.agency_id, date_from, date_to, client_id, agent_id, model, q, tz)
+    query = _replies_query(filters, sort, order)
     if format == "csv":
         rows = [_reply(row) for row in db.execute(query.limit(MAX_EXPORT_ROWS)).all()]
         buffer = io.StringIO()
@@ -265,7 +305,7 @@ def replies(
             writer.writerow([
                 item["created_at"].isoformat(), item["id"], item["conversation_id"] or "", item["contact_name"] or "",
                 item["client_name"] or "", item["agent_name"] or "", item["channel"] or "", item["model"], item["served_by"],
-                item["input_tokens"], item["output_tokens"], f"{item['cost_usd']:.8f}", "yes" if item["estimated"] else "",
+                item["input_tokens"], item["output_tokens"], "" if item["cost_unknown"] else f"{item['cost_usd']:.8f}", "yes" if item["estimated"] else "",
                 item["duration_ms"] if item["duration_ms"] is not None else "",
             ])
         return Response(content=buffer.getvalue(), media_type="text/csv",

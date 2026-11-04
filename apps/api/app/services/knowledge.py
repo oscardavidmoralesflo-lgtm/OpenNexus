@@ -10,7 +10,7 @@ from .. import industries
 from .attachments import llm_text
 from ..models import Agent, KnowledgeChunk, KnowledgeDocument
 from .embeddings import cosine_similarity, embed_query, embed_texts
-from .providers import DEFAULT_PROVIDER, resolve_provider_credentials
+from .providers import resolve_model_credentials
 
 
 MAX_FULL_CONTEXT_CHARS = 45_000
@@ -52,12 +52,16 @@ def _chunks(text: str, size: int = 1800) -> list[str]:
     return result
 
 
-def build_knowledge(agent: Agent, documents: list[KnowledgeDocument], query: str) -> KnowledgeResult:
+def build_knowledge(
+    agent: Agent, documents: list[KnowledgeDocument], query: str, *, full_up_to: int = MAX_FULL_CONTEXT_CHARS
+) -> KnowledgeResult:
+    """Everything when the documents fit in ``full_up_to`` characters, else the
+    chunks that best match the query."""
     valid_docs = [doc for doc in documents if doc.status == "processed" and doc.extracted_text.strip()]
     total = sum(len(doc.extracted_text) for doc in valid_docs)
     sources: list[dict] = []
 
-    if total <= MAX_FULL_CONTEXT_CHARS:
+    if total <= full_up_to:
         sections = []
         for doc in valid_docs:
             sections.append(f"DOCUMENTO: {doc.filename}\n{doc.extracted_text}")
@@ -99,14 +103,14 @@ async def embed_document_chunks(db: Session, agent: Agent, document: KnowledgeDo
     """
     if not document.extracted_text.strip():
         return 0
-    credentials = resolve_provider_credentials(db, agent.agency_id, DEFAULT_PROVIDER)
+    credentials = resolve_model_credentials(db, agent.agency_id, agent.embedding_model)
     if not credentials:
         return 0
     pieces = _chunks(document.extracted_text)
     if not pieces:
         return 0
-    base_url, api_key = credentials
-    vectors = await embed_texts(base_url, api_key, pieces, agent.embedding_model)
+    _, base_url, api_key, upstream_model = credentials
+    vectors = await embed_texts(base_url, api_key, pieces, upstream_model)
     if not vectors:
         return 0
     # Replace whatever was indexed before (possibly with another model).
@@ -130,7 +134,7 @@ async def reindex_document(db: Session, agent: Agent, document: KnowledgeDocumen
     """Re-embed one document with the agent's current model. Raises RuntimeError
     when there is no provider key or the provider returned nothing, so the
     caller can report it. A document with no usable text is a no-op (returns 0)."""
-    if not resolve_provider_credentials(db, agent.agency_id, DEFAULT_PROVIDER):
+    if not resolve_model_credentials(db, agent.agency_id, agent.embedding_model):
         raise RuntimeError("No provider key is configured for embeddings")
     if document.status != "processed" or not document.extracted_text.strip():
         return 0
@@ -147,7 +151,7 @@ async def reindex_agent(db: Session, agent: Agent) -> int:
     has no provider key or the provider rejected the embedding calls, so the
     caller can report it instead of silently leaving documents unindexed.
     """
-    if not resolve_provider_credentials(db, agent.agency_id, DEFAULT_PROVIDER):
+    if not resolve_model_credentials(db, agent.agency_id, agent.embedding_model):
         raise RuntimeError("No provider key is configured for embeddings")
     documents = list(db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.agent_id == agent.id)).all())
     written = 0
@@ -161,27 +165,29 @@ async def reindex_agent(db: Session, agent: Agent) -> int:
     return written
 
 
-async def retrieve_knowledge(db: Session, agent: Agent, query: str) -> KnowledgeResult:
+async def retrieve_knowledge(
+    db: Session, agent: Agent, query: str, *, full_up_to: int = MAX_FULL_CONTEXT_CHARS
+) -> KnowledgeResult:
     """Return the knowledge context for a query.
 
-    Small knowledge bases are included in full. Larger ones use semantic search
-    over stored embeddings, falling back to keyword ranking when embeddings are
-    unavailable.
+    Knowledge bases up to ``full_up_to`` characters are included in full.
+    Larger ones use semantic search over stored embeddings, falling back to
+    keyword ranking when embeddings are unavailable.
     """
     documents = list(
         db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.agent_id == agent.id)).all()
     )
     valid_docs = [doc for doc in documents if doc.status == "processed" and doc.extracted_text.strip()]
     total = sum(len(doc.extracted_text) for doc in valid_docs)
-    if total <= MAX_FULL_CONTEXT_CHARS:
-        return build_knowledge(agent, valid_docs, query)
+    if total <= full_up_to:
+        return build_knowledge(agent, valid_docs, query, full_up_to=full_up_to)
 
     semantic = await _semantic_search(db, agent, query)
-    return semantic if semantic is not None else build_knowledge(agent, valid_docs, query)
+    return semantic if semantic is not None else build_knowledge(agent, valid_docs, query, full_up_to=full_up_to)
 
 
 async def _semantic_search(db: Session, agent: Agent, query: str) -> KnowledgeResult | None:
-    credentials = resolve_provider_credentials(db, agent.agency_id, DEFAULT_PROVIDER)
+    credentials = resolve_model_credentials(db, agent.agency_id, agent.embedding_model)
     if not credentials:
         return None
     chunks = list(
@@ -192,8 +198,8 @@ async def _semantic_search(db: Session, agent: Agent, query: str) -> KnowledgeRe
     chunks = [chunk for chunk in chunks if chunk.embedding and chunk.embedding_model == agent.embedding_model]
     if not chunks:
         return None
-    base_url, api_key = credentials
-    query_vector = await embed_query(base_url, api_key, query, agent.embedding_model)
+    _, base_url, api_key, upstream_model = credentials
+    query_vector = await embed_query(base_url, api_key, query, upstream_model)
     if not query_vector:
         return None
 
@@ -373,6 +379,7 @@ def _section(title: str, body: str, level: int = 2) -> str:
 _CHANNEL_NAMES = {
     "whatsapp": "WhatsApp", "whatsapp_cloud": "WhatsApp", "instagram": "Instagram", "messenger": "Facebook Messenger",
     "widget": {"es": "Chat web", "en": "Web chat"},
+    "phone": {"es": "Llamada telefónica", "en": "Phone call"},
 }
 
 
@@ -418,13 +425,15 @@ def contact_context(conversation, lang: str | None = None, definitions: dict | N
     return _section(text["contact"], "\n".join(lines) + "\n\n" + text["contact_rule"])
 
 
-def build_system_prompt(agent: Agent, knowledge_text: str, capture_text: str = "") -> str:
+def build_system_prompt(agent: Agent, knowledge_text: str, capture_text: str = "", *, with_time: bool = True) -> str:
     """Compose the system prompt as a markdown document.
 
     Headings and the few fixed sentences follow the agent's prompt language;
     what the operator typed goes in verbatim. Empty sections are left out.
     ``capture_text`` (from ``services.capture.capture_context``) goes right
     after the job, where the model still reads instructions as its own tasks.
+    ``with_time`` off leaves out the current date and time, for a prompt that
+    is stored and used later (a phone line's, whose platform adds them).
     """
     client = agent.client
     lang = agent.prompt_language if agent.prompt_language in _PROMPT_TEXT else "es"
@@ -450,7 +459,7 @@ def build_system_prompt(agent: Agent, knowledge_text: str, capture_text: str = "
     head = "\n".join([
         f"# {text['title'].format(name=agent.name, client=client.name)}",
         *identity,
-        text["now"].format(tz=tz_name, now=f"{text['weekdays'][now.weekday()]}, {now:%Y-%m-%d %H:%M}"),
+        *([text["now"].format(tz=tz_name, now=f"{text['weekdays'][now.weekday()]}, {now:%Y-%m-%d %H:%M}")] if with_time else []),
     ])
     parts = [head]
     if agent.instructions.strip():

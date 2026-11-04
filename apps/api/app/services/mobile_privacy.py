@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
-from ..models import Agent, AgentTool, Client, SocialChannel, WhatsAppChannel, WhatsAppCloudChannel
+from ..models import Agent, AgentTool, Client, PhoneChannel, SocialChannel, WhatsAppChannel, WhatsAppCloudChannel
 from . import notifications, providers
 
 
@@ -65,16 +65,20 @@ def disclosure(db: Session, client: Client) -> MobilePrivacy:
     # An inactive agent may still process media for an existing conversation.
     agents = db.execute(select(
         Agent.id, Agent.provider, Agent.image_enabled, Agent.audio_enabled,
+        Agent.model, Agent.image_model, Agent.audio_model,
     ).where(Agent.client_id == client.id)).all()
     for agent in agents:
         name, host = provider_destination(db, client.agency_id, agent.provider)
         add("ai", name, host, ["conversation"])
-        media = [capability for capability, enabled in (
-            ("image", agent.image_enabled), ("audio", agent.audio_enabled),
-        ) if enabled]
-        if media:
-            name, host = provider_destination(db, client.agency_id, providers.DEFAULT_PROVIDER)
-            add("ai", name, host, media)
+        for capability, enabled, model, preferred in (
+            ("image", agent.image_enabled, agent.image_model or agent.model,
+             providers.DEFAULT_PROVIDER if agent.image_model else agent.provider),
+            ("audio", agent.audio_enabled, agent.audio_model, providers.DEFAULT_PROVIDER),
+        ):
+            if enabled:
+                provider = providers.model_disclosure_provider(db, client.agency_id, model, preferred=preferred)
+                name, host = provider_destination(db, client.agency_id, provider)
+                add("ai", name, host, [capability])
     for tool_type, url in db.execute(
         select(AgentTool.type, AgentTool.url).join(Agent, Agent.id == AgentTool.agent_id)
         .where(Agent.client_id == client.id, AgentTool.enabled.is_(True))
@@ -87,6 +91,10 @@ def disclosure(db: Session, client: Client) -> MobilePrivacy:
         add("integration", "WhatsApp", "graph.facebook.com", ["messages", "uploads"])
     for provider in db.scalars(select(SocialChannel.provider).where(SocialChannel.client_id == client.id, SocialChannel.is_enabled.is_(True))):
         add("integration", "Instagram" if provider == "instagram" else "Messenger", "graph.facebook.com", ["messages", "uploads"])
+    # A phone call's voice goes through ElevenLabs and the line's carrier.
+    for provider in db.scalars(select(PhoneChannel.provider).where(PhoneChannel.client_id == client.id, PhoneChannel.is_enabled.is_(True)).distinct()):
+        add("integration", "ElevenLabs", "api.elevenlabs.io", ["messages"])
+        add("integration", "Twilio" if provider == "twilio" else "Telnyx", "twilio.com" if provider == "twilio" else "telnyx.com", ["messages"])
     if notifications.push_enabled():
         name, host = notification_destination()
         add("notification", name, host, ["notifications"])

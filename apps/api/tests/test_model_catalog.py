@@ -52,7 +52,8 @@ def test_the_catalog_is_what_openrouter_lists(monkeypatch):
     assert catalog.get_embedding_model("openai/text-embedding-3-small").input_price_per_1k == 0.00002
 
     offered = catalog.available_models()
-    assert offered["chat"] == {"openrouter": ids}
+    assert offered["chat"]["openrouter"] == ids
+    assert "gpt-4.1-mini" in offered["chat"]["openai"]
     assert offered["image"] == ["openai/gpt-5.6-luna"]
     assert offered["embedding"] == ["openai/text-embedding-3-small"]
     # Transcription comes from the setting, since OpenRouter lists it nowhere.

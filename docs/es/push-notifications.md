@@ -2,7 +2,7 @@
 
 > Read in English: [push-notifications.md](../en/push-notifications.md)
 
-OpenNexus trae la *fontanería* de notificaciones y ningún *proveedor*. En una
+Agentaria trae la *fontanería* de notificaciones y ningún *proveedor*. En una
 instalación por defecto no hay cuenta que crear, ningún tercero involucrado y
 nada que pagar: `PUSH_PROVIDER` vale `none` y el servidor no envía nada.
 
@@ -19,7 +19,7 @@ ese servidor envía.
 
 La consecuencia práctica:
 
-- **Corres tu propio OpenNexus y usas la app oficial de la tienda.** Esa app
+- **Corres tu propio Agentaria y usas la app oficial de la tienda.** Esa app
   lee y responde todo en tu servidor sin problema, pero no puede recibir push
   desde él: la compilación de la tienda solo acepta notificaciones de las
   credenciales con las que se firmó, que son de quien la publicó. Es el modelo

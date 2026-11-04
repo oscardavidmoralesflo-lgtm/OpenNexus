@@ -23,9 +23,12 @@ from ..services.attachments import (
     store_attachment,
 )
 from ..services.tools import run_completion
+from ..services.booking import BookingChanges, apply_bookings, build_booking_specs
+from ..services.pipeline import StageChanges, apply_stage, build_stage_spec
 from ..services.capture import apply_captures, build_capture_spec, capture_context, field_definitions
 from ..services.follow_ups import after_agent_reply
 from ..services.resolution import build_resolution_spec, resolution_prompt
+from ..services.media_library import build_media_spec, media_prompt
 from ..services.knowledge import contact_context, build_system_prompt, llm_turns, retrieve_knowledge
 from ..services.providers import resolve_agent_credentials
 from ..services.usage import record_usage
@@ -292,6 +295,17 @@ async def _widget_ai_reply(db: Session, agent: Agent, conversation: Conversation
     resolution_spec = build_resolution_spec(resolution_holder) if agent.resolve_enabled else None
     if resolution_spec:
         system_content += "\n\n" + resolution_prompt(agent)
+    media_spec = build_media_spec(db, agent)
+    if media_spec:
+        system_content += "\n\n" + media_prompt(agent)
+    booking_changes = BookingChanges()
+    booking_specs, booking_rules = build_booking_specs(db, agent, conversation, booking_changes)
+    if booking_rules:
+        system_content += "\n\n" + booking_rules
+    stage_changes = StageChanges()
+    stage_spec, stage_rules = build_stage_spec(db, agent, conversation, stage_changes)
+    if stage_rules:
+        system_content += "\n\n" + stage_rules
     messages = [
         {"role": "system", "content": system_content},
         *llm_turns(history, agent.prompt_language),
@@ -301,12 +315,14 @@ async def _widget_ai_reply(db: Session, agent: Agent, conversation: Conversation
         completion = await run_completion(
             db, agent, base_url, api_key, messages,
             temperature=agent.temperature, max_tokens=agent.max_tokens,
-            extra_specs=[spec for spec in (capture_spec, resolution_spec) if spec] or None,
+            extra_specs=[*(spec for spec in (capture_spec, resolution_spec, media_spec) if spec), *booking_specs, *([stage_spec] if stage_spec else [])] or None,
         )
     except HTTPException:
         return None
 
     apply_captures(db, conversation, capture_holder, definitions)
+    apply_bookings(db, agent, conversation, booking_changes)
+    apply_stage(db, conversation, stage_changes)
     after_agent_reply(
         conversation, agent, resolution_holder[-1] if resolution_holder else None, replied=bool(completion.text)
     )

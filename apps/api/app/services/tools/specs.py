@@ -6,6 +6,7 @@ consecutive underscores, so the "__" separator is unambiguous.
 """
 
 import re
+import hashlib
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -24,9 +25,11 @@ class ToolSpec:
     tool: AgentTool | None = None      # backing row; None for built-in tools
     mcp_tool_name: str | None = None  # unprefixed name on the MCP server
     # Built-in tools run in-process: the handler takes the arguments and
-    # returns (result_text, is_error). It must not do I/O; side effects are
-    # recorded and applied by the caller after the loop finishes.
-    handler: Callable[[dict], tuple[str, bool]] | None = None
+    # returns (result_text, is_error), or (result_text, is_error, files) when
+    # it hands the loop files to deliver as attachments (tool_files.ToolFile).
+    # It must not call out; side effects are recorded and applied by the
+    # caller after the loop finishes.
+    handler: Callable[[dict], tuple] | None = None
 
 
 def path_placeholders(url: str) -> list[str]:
@@ -70,6 +73,10 @@ def build_tool_specs(tools: list[AgentTool]) -> list[ToolSpec]:
             if allowed is not None and mcp_name not in allowed:
                 continue
             composite = f"{tool.name}__{mcp_name}"
+            # Some managed tools have long native slugs. Keep dispatching with
+            # the original name while exposing a stable, provider-sized alias.
+            if len(composite) > 64 and re.fullmatch(r"[a-zA-Z0-9_-]+", composite):
+                composite = composite[:51] + "_" + hashlib.sha256(composite.encode()).hexdigest()[:12]
             if not PROVIDER_NAME_RE.match(composite):
                 continue
             specs.append(

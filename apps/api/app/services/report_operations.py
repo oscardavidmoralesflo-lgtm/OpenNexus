@@ -45,7 +45,8 @@ class ConversationFilters:
 
     def __init__(self, agency_id: uuid.UUID, *, date_from: date | None, date_to: date | None,
                  client_id: uuid.UUID | None, agent_id: uuid.UUID | None, channel: str | None,
-                 tz: str | None, model: str | None = None, provider: str | None = None, bucket: str | None = None) -> None:
+                 tz: str | None, model: str | None = None, provider: str | None = None, bucket: str | None = None,
+                 exclude_channel: str | None = None) -> None:
         if date_from and date_to:
             if date_to < date_from:
                 date_from, date_to = date_to, date_from
@@ -61,17 +62,21 @@ class ConversationFilters:
         self.model = (model or "").strip()[:180] or None
         self.provider = (provider or "").strip()[:30] or None
         self.bucket = safe_bucket(bucket)
+        self.exclude_channel = exclude_channel
 
     def where(self, alias: str = "c", stamp: str | None = None) -> tuple[str, dict]:
         stamp = stamp or f"{alias}.created_at"
         clauses = [f"{alias}.agency_id = :agency_id"]
         params: dict = {"agency_id": self.agency_id, "tz": self.tz, "bucket": self.bucket}
-        start = datetime.combine(self.date_from, time.min, tzinfo=timezone.utc) if self.date_from else datetime(1970, 1, 1, tzinfo=timezone.utc)
+        # A day is the viewer's day: cut in UTC, an evening's work would land
+        # on the next day and the current one would end hours early.
+        zone = ZoneInfo(self.tz)
+        start = datetime.combine(self.date_from, time.min, tzinfo=zone) if self.date_from else datetime(1970, 1, 1, tzinfo=timezone.utc)
         params["date_from"] = start
         clauses.append(f"{stamp} >= :date_from")
         if self.date_to:
             clauses.append(f"{stamp} < :date_to")
-            params["date_to"] = datetime.combine(self.date_to + timedelta(days=1), time.min, tzinfo=timezone.utc)
+            params["date_to"] = datetime.combine(self.date_to + timedelta(days=1), time.min, tzinfo=zone)
         if self.client_id:
             clauses.append(f"{alias}.client_id = :client_id")
             params["client_id"] = self.client_id
@@ -81,6 +86,9 @@ class ConversationFilters:
         if self.channel:
             clauses.append(f"{alias}.channel = :channel")
             params["channel"] = self.channel
+        if self.exclude_channel:
+            clauses.append(f"{alias}.channel <> :exclude_channel")
+            params["exclude_channel"] = self.exclude_channel
         if self.model:
             clauses.append("ag.model = :model")
             params["model"] = self.model

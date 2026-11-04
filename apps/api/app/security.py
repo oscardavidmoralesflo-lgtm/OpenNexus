@@ -26,9 +26,60 @@ def create_access_token(user_id: str) -> str:
 def decode_access_token(token: str) -> str | None:
     try:
         payload = jwt.decode(token, get_settings().secret_key, algorithms=["HS256"])
-        return payload.get("sub")
     except jwt.PyJWTError:
         return None
+    # Dashboard sessions carry no type; a portal session or a two-step
+    # challenge is never accepted as one.
+    if payload.get("type") is not None:
+        return None
+    return payload.get("sub")
+
+
+PASSWORD_RESET_MINUTES = 30
+
+
+def _password_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
+
+
+def create_password_reset_token(user_id: str, password_hash: str) -> str:
+    """A link token to set a new password. It names the current password, so
+    it stops working once the password changes: it can be used only once."""
+    expires = datetime.now(timezone.utc) + timedelta(minutes=PASSWORD_RESET_MINUTES)
+    payload = {"sub": user_id, "type": "reset", "ph": _password_fingerprint(password_hash), "exp": expires}
+    return jwt.encode(payload, get_settings().secret_key, algorithm="HS256")
+
+
+def decode_password_reset_token(token: str) -> tuple[str, str] | None:
+    """(user id, password fingerprint) from a reset token, or None."""
+    try:
+        payload = jwt.decode(token, get_settings().secret_key, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+    if payload.get("type") != "reset" or not payload.get("sub") or not payload.get("ph"):
+        return None
+    return payload["sub"], payload["ph"]
+
+
+def reset_token_matches(fingerprint: str, password_hash: str) -> bool:
+    return fingerprint == _password_fingerprint(password_hash)
+
+
+TWO_FACTOR_CHALLENGE_MINUTES = 5
+
+
+def create_two_factor_challenge(user_id: str) -> str:
+    """Proof that the password was right, valid only to send the second step."""
+    expires = datetime.now(timezone.utc) + timedelta(minutes=TWO_FACTOR_CHALLENGE_MINUTES)
+    return jwt.encode({"sub": user_id, "type": "2fa", "exp": expires}, get_settings().secret_key, algorithm="HS256")
+
+
+def decode_two_factor_challenge(token: str) -> str | None:
+    try:
+        payload = jwt.decode(token, get_settings().secret_key, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+    return payload.get("sub") if payload.get("type") == "2fa" else None
 
 
 def create_portal_token(client_id: str, portal_slug: str, portal_user_id: str | None = None) -> str:

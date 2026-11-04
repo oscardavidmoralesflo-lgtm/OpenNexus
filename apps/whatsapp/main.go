@@ -147,6 +147,10 @@ func main() {
 	host := getenv("WHATSAPP_BRIDGE_HOST", "127.0.0.1")
 	token := getenv("WHATSAPP_BRIDGE_TOKEN", "dev-local-change-this-bridge-token")
 	backendURL := strings.TrimRight(getenv("BACKEND_URL", "http://localhost:8000"), "/")
+	// A private network may give the backend as bare host:port.
+	if !strings.Contains(backendURL, "://") {
+		backendURL = "http://" + backendURL
+	}
 	storeURL := getenv("WHATSAPP_STORE_URL", "file:whatsmeow.db")
 	logLevel := getenv("WHATSAPP_LOG_LEVEL", "ERROR")
 

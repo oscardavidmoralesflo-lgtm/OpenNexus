@@ -1,0 +1,26 @@
+# The single public origin on Render: "/api/*" goes to the API and everything
+# else to the frontend, both private services reached over Render's private
+# network. Render terminates TLS in front of this service.
+{
+	admin off
+	servers {
+		# Render's edge proxy sets X-Forwarded-For; keep the client address it
+		# carries so the API's per-IP rate limits see the real visitor.
+		trusted_proxies static private_ranges 100.64.0.0/10
+	}
+}
+
+:{$PORT:10000} {
+	encode zstd gzip
+	# Render's health check: the API's own /health, through the gateway.
+	handle /healthz {
+		rewrite * /health
+		reverse_proxy {$API_HOSTPORT}
+	}
+	handle /api/* {
+		reverse_proxy {$API_HOSTPORT}
+	}
+	handle {
+		reverse_proxy {$WEB_HOSTPORT}
+	}
+}

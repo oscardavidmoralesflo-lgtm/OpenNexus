@@ -49,7 +49,7 @@ def record_usage(
     the session flushes. The caller owns the commit. Returns the pending
     record (with its id), or None when there was nothing to record.
     """
-    if completion.input_tokens <= 0 and completion.output_tokens <= 0:
+    if completion.input_tokens <= 0 and completion.output_tokens <= 0 and not completion.cost_usd:
         return None
     if message is not None and message.id is None:
         message.id = new_uuid()
@@ -87,7 +87,7 @@ def schedule_generation_reconcile(record: UsageRecord | None, completion: Comple
     record in from the router's record once it exists. Runs in the
     background of the current event loop; a no-op when there is nothing to
     reconcile or no loop (a synchronous caller)."""
-    if record is None or completion.cost_usd is not None or not completion.generation_id:
+    if "openrouter." not in base_url or record is None or completion.cost_usd is not None or not completion.generation_id:
         return
     try:
         loop = asyncio.get_running_loop()

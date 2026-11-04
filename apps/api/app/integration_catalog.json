@@ -1,0 +1,787 @@
+[
+  {
+    "category": "Developer & IT",
+    "name": "Airtable",
+    "slug": "airtable"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Aiwyn Tax MCP",
+    "slug": "aiwyn_tax_mcp"
+  },
+  {
+    "category": "Lifestyle & Personal",
+    "name": "AllTrails MCP",
+    "slug": "alltrails_mcp"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Apaleo",
+    "slug": "apaleo"
+  },
+  {
+    "category": "Productivity",
+    "name": "Asana",
+    "slug": "asana"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Attio",
+    "slug": "attio"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "AWS Marketplace MCP",
+    "slug": "aws_marketplace_mcp"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Basecamp",
+    "slug": "basecamp"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Bench",
+    "slug": "bench"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Bitbucket",
+    "slug": "bitbucket"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Blackbaud",
+    "slug": "blackbaud"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Boldsign",
+    "slug": "boldsign"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Box",
+    "slug": "box"
+  },
+  {
+    "category": "AI Tools",
+    "name": "Browser Tool",
+    "slug": "browser_tool"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Cal",
+    "slug": "cal"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Calendly",
+    "slug": "calendly"
+  },
+  {
+    "category": "Design & Creative",
+    "name": "Canva",
+    "slug": "canva"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Capsule CRM",
+    "slug": "capsule_crm"
+  },
+  {
+    "category": "Analytics & Data",
+    "name": "Clarity AI MCP",
+    "slug": "clarity_ai_mcp"
+  },
+  {
+    "category": "Productivity",
+    "name": "ClickUp",
+    "slug": "clickup"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Code Interpreter",
+    "slug": "codeinterpreter"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Composio",
+    "slug": "composio"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Composio Search",
+    "slug": "composio_search"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Confluence",
+    "slug": "confluence"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Contentful",
+    "slug": "contentful"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Crowdin",
+    "slug": "crowdin"
+  },
+  {
+    "category": "AI Tools",
+    "name": "Dart",
+    "slug": "dart"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Daytona",
+    "slug": "daytona"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "DeepWiki MCP",
+    "slug": "deepwiki_mcp"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Dialpad",
+    "slug": "dialpad"
+  },
+  {
+    "category": "HR & Recruiting",
+    "name": "Dice MCP",
+    "slug": "dice_mcp"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Discord",
+    "slug": "discord"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Discord Bot",
+    "slug": "discordbot"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Dropbox",
+    "slug": "dropbox"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Dub",
+    "slug": "dub"
+  },
+  {
+    "category": "Productivity",
+    "name": "Dynamics 365",
+    "slug": "dynamics365"
+  },
+  {
+    "category": "AI Tools",
+    "name": "Entelligence",
+    "slug": "entelligence"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Eventbrite",
+    "slug": "eventbrite"
+  },
+  {
+    "category": "Productivity",
+    "name": "Excalidraw MCP",
+    "slug": "excalidraw_mcp"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Excel",
+    "slug": "excel"
+  },
+  {
+    "category": "Analytics & Data",
+    "name": "Exist",
+    "slug": "exist"
+  },
+  {
+    "category": "Marketing",
+    "name": "Facebook",
+    "slug": "facebook"
+  },
+  {
+    "category": "AI Tools",
+    "name": "Fathom",
+    "slug": "fathom"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Figma",
+    "slug": "figma"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Freeagent",
+    "slug": "freeagent"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "FreshBooks",
+    "slug": "freshbooks"
+  },
+  {
+    "category": "AI Tools",
+    "name": "Gemini",
+    "slug": "gemini"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "GitHub",
+    "slug": "github"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "GitLab",
+    "slug": "gitlab"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "GLEIF API",
+    "slug": "gleif"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Gmail",
+    "slug": "gmail"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "GoDaddy MCP",
+    "slug": "godaddy_mcp"
+  },
+  {
+    "category": "AI Tools",
+    "name": "Gong",
+    "slug": "gong"
+  },
+  {
+    "category": "Marketing",
+    "name": "Google Ads",
+    "slug": "googleads"
+  },
+  {
+    "category": "Analytics & Data",
+    "name": "Google Analytics",
+    "slug": "google_analytics"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Google BigQuery",
+    "slug": "googlebigquery"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Google Calendar",
+    "slug": "googlecalendar"
+  },
+  {
+    "category": "Lifestyle & Personal",
+    "name": "Google Classroom",
+    "slug": "google_classroom"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Google Docs",
+    "slug": "googledocs"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Google Drive",
+    "slug": "googledrive"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Google Maps",
+    "slug": "google_maps"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Google Meet",
+    "slug": "googlemeet"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Google Photos",
+    "slug": "googlephotos"
+  },
+  {
+    "category": "Analytics & Data",
+    "name": "Google Search Console",
+    "slug": "google_search_console"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Google Sheets",
+    "slug": "googlesheets"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Google Slides",
+    "slug": "googleslides"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Google Super",
+    "slug": "googlesuper"
+  },
+  {
+    "category": "Productivity",
+    "name": "Google Tasks",
+    "slug": "googletasks"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Gorgias",
+    "slug": "gorgias"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Granted MCP",
+    "slug": "granted_mcp"
+  },
+  {
+    "category": "HR & Recruiting",
+    "name": "Greenhouse",
+    "slug": "greenhouse"
+  },
+  {
+    "category": "E-commerce & Payments",
+    "name": "Gumroad",
+    "slug": "gumroad"
+  },
+  {
+    "category": "Lifestyle & Personal",
+    "name": "Hacker News",
+    "slug": "hackernews"
+  },
+  {
+    "category": "Productivity",
+    "name": "Harvest",
+    "slug": "harvest"
+  },
+  {
+    "category": "Marketing",
+    "name": "Highlevel",
+    "slug": "highlevel"
+  },
+  {
+    "category": "Marketing",
+    "name": "HubSpot",
+    "slug": "hubspot"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Hugging Face",
+    "slug": "hugging_face"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Inspo MCP",
+    "slug": "inspo_mcp"
+  },
+  {
+    "category": "Marketing",
+    "name": "Instagram",
+    "slug": "instagram"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Intercom",
+    "slug": "intercom"
+  },
+  {
+    "category": "Productivity",
+    "name": "Jira",
+    "slug": "jira"
+  },
+  {
+    "category": "Marketing",
+    "name": "Kit",
+    "slug": "kit"
+  },
+  {
+    "category": "Productivity",
+    "name": "Linear",
+    "slug": "linear"
+  },
+  {
+    "category": "Marketing",
+    "name": "LinkedIn",
+    "slug": "linkedin"
+  },
+  {
+    "category": "Productivity",
+    "name": "Linkhut",
+    "slug": "linkhut"
+  },
+  {
+    "category": "Marketing",
+    "name": "Mailchimp",
+    "slug": "mailchimp"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Malwarebytes MCP",
+    "slug": "malwarebytes_mcp"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Mermaid Chart MCP",
+    "slug": "mermaid_chart_mcp"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Microsoft Teams",
+    "slug": "microsoft_teams"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Miro",
+    "slug": "miro"
+  },
+  {
+    "category": "Productivity",
+    "name": "Monday",
+    "slug": "monday"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Moneybird",
+    "slug": "moneybird"
+  },
+  {
+    "category": "Analytics & Data",
+    "name": "MoSPI MCP",
+    "slug": "mospi_mcp"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Mural",
+    "slug": "mural"
+  },
+  {
+    "category": "AI Tools",
+    "name": "NotebookLM",
+    "slug": "notebooklm"
+  },
+  {
+    "category": "Productivity",
+    "name": "Notion",
+    "slug": "notion"
+  },
+  {
+    "category": "Marketing",
+    "name": "Omnisend",
+    "slug": "omnisend"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "OneDrive",
+    "slug": "one_drive"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "OpenWeatherMap",
+    "slug": "weathermap"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "OSV",
+    "slug": "osv"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Outlook",
+    "slug": "outlook"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "PagerDuty",
+    "slug": "pagerduty"
+  },
+  {
+    "category": "Marketing",
+    "name": "Pinterest",
+    "slug": "pinterest"
+  },
+  {
+    "category": "Marketing",
+    "name": "Pinterest Ads",
+    "slug": "pinterest_ads"
+  },
+  {
+    "category": "Analytics & Data",
+    "name": "PopHIVE MCP",
+    "slug": "pophive_mcp"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Prisma",
+    "slug": "prisma"
+  },
+  {
+    "category": "Productivity",
+    "name": "Productboard",
+    "slug": "productboard"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Pushbullet",
+    "slug": "pushbullet"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "QuickBooks",
+    "slug": "quickbooks"
+  },
+  {
+    "category": "Marketing",
+    "name": "Reddit",
+    "slug": "reddit"
+  },
+  {
+    "category": "Marketing",
+    "name": "Reddit Ads",
+    "slug": "reddit_ads"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Roam",
+    "slug": "roam"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Salesforce",
+    "slug": "salesforce"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Seat Geek",
+    "slug": "seat_geek"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Sentry",
+    "slug": "sentry"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Servicem8",
+    "slug": "servicem8"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "SharePoint",
+    "slug": "share_point"
+  },
+  {
+    "category": "E-commerce & Payments",
+    "name": "Shippo",
+    "slug": "shippo"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Slack",
+    "slug": "slack"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Slackbot",
+    "slug": "slackbot"
+  },
+  {
+    "category": "AI Tools",
+    "name": "SlidesGPT MCP",
+    "slug": "slidesgpt_mcp"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Splitwise",
+    "slug": "splitwise"
+  },
+  {
+    "category": "E-commerce & Payments",
+    "name": "Square",
+    "slug": "square"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Stack Exchange",
+    "slug": "stack_exchange"
+  },
+  {
+    "category": "E-commerce & Payments",
+    "name": "Stripe",
+    "slug": "stripe"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "Supabase",
+    "slug": "supabase"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Taskrabbit MCP",
+    "slug": "taskrabbit_mcp"
+  },
+  {
+    "category": "Documents & Files",
+    "name": "Text to PDF",
+    "slug": "text_to_pdf"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Ticketmaster",
+    "slug": "ticketmaster"
+  },
+  {
+    "category": "Productivity",
+    "name": "Ticktick",
+    "slug": "ticktick"
+  },
+  {
+    "category": "Marketing",
+    "name": "TikTok Ads",
+    "slug": "tiktok_ads"
+  },
+  {
+    "category": "Productivity",
+    "name": "Timely",
+    "slug": "timely"
+  },
+  {
+    "category": "Productivity",
+    "name": "Todoist",
+    "slug": "todoist"
+  },
+  {
+    "category": "Productivity",
+    "name": "Trello",
+    "slug": "trello"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Trivago MCP",
+    "slug": "trivago_mcp"
+  },
+  {
+    "category": "Design & Creative",
+    "name": "Twitch",
+    "slug": "twitch"
+  },
+  {
+    "category": "Productivity",
+    "name": "Typeform",
+    "slug": "typeform"
+  },
+  {
+    "category": "Scheduling & Calendar",
+    "name": "Viator MCP",
+    "slug": "viator_mcp"
+  },
+  {
+    "category": "Developer & IT",
+    "name": "WakaTime",
+    "slug": "wakatime"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Webex",
+    "slug": "webex"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "WhatsApp",
+    "slug": "whatsapp"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Wrike",
+    "slug": "wrike"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Yandex",
+    "slug": "yandex"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Yelp",
+    "slug": "yelp"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "YNAB",
+    "slug": "ynab"
+  },
+  {
+    "category": "Marketing",
+    "name": "YouTube",
+    "slug": "youtube"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Zendesk",
+    "slug": "zendesk"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Zeplin",
+    "slug": "zeplin"
+  },
+  {
+    "category": "HR & Recruiting",
+    "name": "ZipRecruiter MCP",
+    "slug": "ziprecruiter_mcp"
+  },
+  {
+    "category": "Marketing",
+    "name": "Zoho",
+    "slug": "zoho"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Zoho Bigin",
+    "slug": "zoho_bigin"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Zoho Books",
+    "slug": "zoho_books"
+  },
+  {
+    "category": "CRM & Sales",
+    "name": "Zoho Desk",
+    "slug": "zoho_desk"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Zoho Inventory",
+    "slug": "zoho_inventory"
+  },
+  {
+    "category": "Finance & Accounting",
+    "name": "Zoho Invoice",
+    "slug": "zoho_invoice"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Zoho Mail",
+    "slug": "zoho_mail"
+  },
+  {
+    "category": "Communication & Collaboration",
+    "name": "Zoom",
+    "slug": "zoom"
+  }
+]

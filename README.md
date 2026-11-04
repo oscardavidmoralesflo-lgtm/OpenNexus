@@ -1,11 +1,13 @@
 <p align="center">
-  <img src="apps/web/public/brand/opennexus-mark.svg" width="88" alt="OpenNexus" />
+  <img src="apps/web/public/brand/agentaria-mark.svg" width="88" alt="Agentaria" />
 </p>
 
-<h1 align="center">OpenNexus</h1>
+<h1 align="center">Agentaria</h1>
 
 <p align="center">
-  The open-source, white-label platform for agencies to build, run and manage AI agents for their clients.
+  AI agents for agencies: the white-label platform to build, run and manage AI agents for every client.
+  <br />
+  <sub>Formerly OpenNexus. The repository, Docker images and environment variables keep the <code>opennexus</code> name.</sub>
 </p>
 
 <p align="center">
@@ -25,7 +27,7 @@
 
 ---
 
-One OpenNexus installation serves one agency. The agency creates AI agents for its
+One Agentaria installation serves one agency. The agency creates AI agents for its
 clients, gives each client a branded portal, and talks to end users over
 WhatsApp or an embeddable web chat widget. Bring your own OpenRouter key and
 self-host the whole thing with one command.
@@ -71,10 +73,11 @@ Full documentation lives in **[docs/](docs/)**. Every guide is written twice:
 - ✅ **MCP servers** (Streamable HTTP or SSE) with test-before-save connection checks and cached tool discovery
 - ✅ Tool usage recorded per reply and surfaced in the playground, including failure details
 
-**Channels** — [WhatsApp Cloud API](docs/en/whatsapp-cloud-api.md) · [WhatsApp QR](docs/en/whatsapp.md) · [Web widget](docs/en/web-widget.md)
+**Channels** — [WhatsApp Cloud API](docs/en/whatsapp-cloud-api.md) · [WhatsApp QR](docs/en/whatsapp.md) · [Web widget](docs/en/web-widget.md) · [Phone calls](docs/en/phone-calls.md)
 - ✅ **WhatsApp Cloud API** (official Meta API) — bring your own Meta app credentials, signed webhooks, per-client number
 - ✅ **WhatsApp QR** through whatsmeow — QR link, per-client number, persistent session that reconnects on its own
 - ✅ Embeddable **web chat widget** for any website
+- ✅ **Phone calls**: voice agents answer a client's number through ElevenLabs Agents, on your Twilio or Telnyx numbers, with the agent's knowledge, contact capture and tools
 - 🚧 Instagram DM, Facebook Messenger *(planned)*
 
 **Operations** — [Inbox](docs/en/inbox.md) · [Client portal](docs/en/client-portal.md) · [Dashboard](docs/en/dashboard.md)
@@ -122,7 +125,7 @@ Deploying to a public server (reverse proxy, TLS, backups) is covered in
 
 ## Community & support
 
-- **[GitHub Discussions](https://github.com/oscardavidmoralesflo-lgtm/OpenNexus/discussions)** — questions, ideas and help building with OpenNexus.
+- **[GitHub Discussions](https://github.com/oscardavidmoralesflo-lgtm/OpenNexus/discussions)** — questions, ideas and help building with Agentaria.
 - **[GitHub Issues](https://github.com/oscardavidmoralesflo-lgtm/OpenNexus/issues)** — bugs and feature requests.
 
 ## Project structure
@@ -144,7 +147,7 @@ docker-compose.yml
 `apps/mobile` is an optional Expo app: the inbox a business you serve carries in
 their pocket, with conversations, takeover, replies, photos and voice notes. It
 is not installed with the platform and the server does not need it — nobody
-running OpenNexus has to build or deploy it to have everything working.
+running Agentaria has to build or deploy it to have everything working.
 
 It deliberately carries **no brand**: no name, no logo, no bundle identifier, no
 preset pointing at any hosted service. What ships is a working app and the
@@ -164,4 +167,4 @@ all code, identifiers, comments and docs are in English; end-user UI is localize
 
 [MIT](./LICENSE).
 
-OpenNexus is built on [OpenLivery](https://github.com/sarrazola/openlivery), released under the MIT License by the OpenLivery contributors. Their copyright notice is kept in [LICENSE](./LICENSE).
+Agentaria is built on [OpenLivery](https://github.com/sarrazola/openlivery), released under the MIT License by the OpenLivery contributors. Their copyright notice is kept in [LICENSE](./LICENSE).

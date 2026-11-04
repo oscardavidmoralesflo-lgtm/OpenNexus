@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 
 from .services.capture import CAPTURE_CHANNELS, FIELD_KEY_PATTERN, FIELD_KINDS
 from .services.model_catalog import DEFAULT_AUDIO_MODEL, DEFAULT_EMBEDDING_MODEL
+from .services.providers import PROVIDER_PATTERN
 
 # OpenRouter slug: "vendor/model", optionally with a ":variant" suffix.
 MODEL_SLUG_PATTERN = r"^[a-z0-9-]+/[A-Za-z0-9._-]+(?::[a-z0-9-]+)?$"
@@ -22,6 +23,8 @@ class RegisterRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    # Required when the deployment sets SETUP_TOKEN.
+    setup_token: str | None = Field(default=None, max_length=256)
 
 
 class LoginRequest(BaseModel):
@@ -35,6 +38,11 @@ class AgencyOut(ORMModel):
     slug: str
     brand_color: str
     logo_url: str | None = None
+    billing_enabled: bool = False
+    require_two_factor: bool = False
+    # Where the deployment publishes its mobile app, for the agency to pass on.
+    ios_app_url: str | None = None
+    android_app_url: str | None = None
 
 
 class AgencyUpdate(BaseModel):
@@ -48,7 +56,14 @@ class UserOut(ORMModel):
     name: str
     email: EmailStr
     role: str
+    two_factor_enabled: bool = False
     agency: AgencyOut
+
+
+class TwoFactorLogin(BaseModel):
+    challenge: str = Field(min_length=10, max_length=2000)
+    # A 6-digit code from the authenticator app, or one recovery code.
+    code: str = Field(min_length=6, max_length=20)
 
 
 def check_timezone(value: str) -> str:
@@ -106,11 +121,13 @@ class AgentSummary(ORMModel):
     id: uuid.UUID
     name: str
     is_active: bool
+    kind: str = "chat"
 
 
 class ClientOut(ORMModel):
     id: uuid.UUID
     name: str
+    is_sandbox: bool = False
     industry: str
     business_type: str
     business_custom: str
@@ -182,6 +199,27 @@ class ClientDomainOut(BaseModel):
     # DNS records the operator/client must create.
     txt_host: str | None
     txt_value: str | None
+    # Where the CNAME must point, when the deployment says so.
+    cname_target: str | None
+
+
+class WorkspaceDomainOut(BaseModel):
+    # The address the workspace answers on with no setup, when the deployment
+    # serves agencies under a base domain; None otherwise.
+    branded_url: str | None
+    # The agency's own domain and where its verification stands.
+    domain: str | None
+    verified: bool
+    txt_host: str | None
+    txt_value: str | None
+    # Where the domain must point (CNAME), and whether it already does.
+    cname_target: str | None
+    dns_ok: bool
+    # Certificates are issued on demand once the domain is verified.
+    ssl_ready: bool
+    # The address the workspace is reached at: the own domain once verified,
+    # else the branded one, else the primary one.
+    primary_url: str
 
 
 class ProviderKeyUpdate(BaseModel):
@@ -246,7 +284,7 @@ class AgentBase(BaseModel):
     brief_dos: str = ""
     brief_donts: str = ""
     model: str = ""
-    provider: str = Field(default="openrouter", pattern=r"^(openrouter)$")
+    provider: str = Field(default="openrouter", pattern=PROVIDER_PATTERN)
     prompt_language: str = Field(default="es", pattern=r"^(en|es)$")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=1, le=32000)
@@ -263,6 +301,13 @@ class AgentBase(BaseModel):
     # On duty only inside these slots when enabled (see services.availability).
     schedule_enabled: bool = False
     schedule_slots: list[ScheduleSlot] = []
+    # Fixed at creation: a chat agent answers messages, a voice agent calls.
+    kind: Literal["chat", "voice"] = "chat"
+    voice_id: str = Field(default="", max_length=80)
+    voice_name: str = Field(default="", max_length=180)
+    greeting: str = Field(default="", max_length=600)
+    transfer_number: str | None = Field(default=None, max_length=32)
+    transfer_when: str = Field(default="", max_length=600)
 
     @model_validator(mode="after")
     def _reply_delay_bounds(self) -> "AgentBase":
@@ -286,7 +331,7 @@ class AgentUpdate(BaseModel):
     brief_dos: str | None = None
     brief_donts: str | None = None
     model: str | None = None
-    provider: str | None = Field(default=None, pattern=r"^(openrouter)$")
+    provider: str | None = Field(default=None, pattern=PROVIDER_PATTERN)
     prompt_language: str | None = Field(default=None, pattern=r"^(en|es)$")
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1, le=32000)
@@ -302,11 +347,17 @@ class AgentUpdate(BaseModel):
     is_active: bool | None = None
     schedule_enabled: bool | None = None
     schedule_slots: list[ScheduleSlot] | None = None
+    voice_id: str | None = Field(default=None, max_length=80)
+    voice_name: str | None = Field(default=None, max_length=180)
+    greeting: str | None = Field(default=None, max_length=600)
+    transfer_number: str | None = Field(default=None, max_length=32)
+    transfer_when: str | None = Field(default=None, max_length=600)
 
 
 class AgentOut(ORMModel):
     id: uuid.UUID
     client_id: uuid.UUID
+    sandbox_code: str | None = None
     provider: str
     name: str
     instructions: str
@@ -333,6 +384,12 @@ class AgentOut(ORMModel):
     is_active: bool
     schedule_enabled: bool
     schedule_slots: list[ScheduleSlot]
+    kind: str
+    voice_id: str
+    voice_name: str
+    greeting: str
+    transfer_number: str | None = None
+    transfer_when: str = ""
     created_at: datetime
     updated_at: datetime
     client: ClientOut
@@ -380,6 +437,22 @@ class DocumentOut(ORMModel):
     # Embedding model of the stored chunks, or None when nothing is indexed.
     indexed_model: str | None = None
     chunk_count: int = 0
+
+
+class MediaAssetOut(ORMModel):
+    id: uuid.UUID
+    name: str
+    description: str
+    kind: str
+    mime: str
+    filename: str
+    size_bytes: int
+    created_at: datetime
+
+
+class MediaAssetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    description: str | None = Field(default=None, max_length=300)
 
 
 class EmbeddingModelOut(BaseModel):
@@ -495,8 +568,19 @@ class ConversationSummaryRequest(BaseModel):
     language: Literal["es", "en"] = "es"
 
 
+class PhoneCallOut(ORMModel):
+    caller: str | None = None
+    started_at: datetime
+    ended_at: datetime | None = None
+    duration_seconds: int | None = None
+    cost_usd: float | None = None
+    summary: str | None = None
+
+
 class ConversationDetail(ConversationOut):
     messages: list[MessageOut] = []
+    # The call a phone conversation was; None on every other channel.
+    phone_call: PhoneCallOut | None = None
 
 
 class ConversationInboxOut(BaseModel):
@@ -1103,9 +1187,6 @@ class PortalPublicOut(BaseModel):
     agency_brand_color: str
     agency_logo_url: str | None
     client_logo_url: str | None = None
-    # Store pages of the deployment's mobile app, when it publishes one.
-    ios_app_url: str | None = None
-    android_app_url: str | None = None
 
 
 class PortalSessionOut(BaseModel):
@@ -1116,6 +1197,7 @@ class PortalSessionOut(BaseModel):
     # The person behind the session; absent on sessions that predate portal users.
     user_id: uuid.UUID | None = None
     user_name: str | None = None
+    user_email: str | None = None
     # What this person may do. Empty for a session with no person behind it.
     role: str | None = None
     permissions: list[str] = []
@@ -1151,11 +1233,14 @@ class ModelUsage(BaseModel):
 
 class ReportTotals(BaseModel):
     cost_usd: float
+    unpriced_replies: int = 0
     replies: int
     conversations: int
     input_tokens: int
     output_tokens: int
     avg_cost_per_reply_usd: float
+    # Replies whose cost the provider did not report, priced at list price.
+    estimated_replies: int = 0
 
 
 class ReportGroup(BaseModel):
@@ -1199,6 +1284,7 @@ class ReportReply(BaseModel):
     cached_tokens: int
     reasoning_tokens: int
     cost_usd: float
+    cost_unknown: bool = False
     # True when the provider reported no cost and the catalog's list price
     # was used instead.
     estimated: bool
@@ -1215,6 +1301,12 @@ class RepliesPage(BaseModel):
 
 
 class DashboardMetrics(BaseModel):
+    conversations: int = 0
+    ai_resolved: int = 0
+    ai_resolved_pct: float = 0.0
+    first_reply_median_s: float | None = None
+    ai_replies: int = 0
+    ai_cost_usd: float = 0.0
     messages: int
     human_conversations: int
     by_channel: dict[str, int]

@@ -104,16 +104,16 @@ export function McpServerModal({ agentId, tool, open, onClose, onSaved }: {
           <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("tools.form.descriptionPlaceholder")} />
         </label>
         <label>{t("tools.mcp.serverUrl")}
-          <input required type="url" value={url} onChange={(e) => { setUrl(e.target.value); invalidateTest(); }} placeholder="https://mcp-server.example.com/mcp" />
+          <input required type="url" readOnly={tool?.managed} value={url} onChange={(e) => { setUrl(e.target.value); invalidateTest(); }} placeholder="https://mcp-server.example.com/mcp" />
         </label>
         <span className="field-label">{t("tools.mcp.transport")}</span>
         <div className="transport-toggle">
-          <button type="button" className={transport === "sse" ? "active" : ""} onClick={() => { setTransport("sse"); invalidateTest(); }}>{t("tools.mcp.sse")}</button>
-          <button type="button" className={transport === "streamable_http" ? "active" : ""} onClick={() => { setTransport("streamable_http"); invalidateTest(); }}>{t("tools.mcp.streamableHttp")}</button>
+          <button type="button" disabled={tool?.managed} className={transport === "sse" ? "active" : ""} onClick={() => { setTransport("sse"); invalidateTest(); }}>{t("tools.mcp.sse")}</button>
+          <button type="button" disabled={tool?.managed} className={transport === "streamable_http" ? "active" : ""} onClick={() => { setTransport("streamable_http"); invalidateTest(); }}>{t("tools.mcp.streamableHttp")}</button>
         </div>
         <span className="field-label">{t("tools.form.headers")}</span>
         {tool?.has_headers && !showHeaders
-          ? <div className="stored-headers"><small>{t("tools.form.headersConfigured")}</small><button type="button" className="button ghost" onClick={() => { setShowHeaders(true); setHeadersTouched(true); invalidateTest(); }}>{t("tools.form.replaceHeaders")}</button></div>
+          ? <div className="stored-headers"><small>{t("tools.form.headersConfigured")}</small>{!tool.managed && <button type="button" className="button ghost" onClick={() => { setShowHeaders(true); setHeadersTouched(true); invalidateTest(); }}>{t("tools.form.replaceHeaders")}</button>}</div>
           : <HeadersEditor rows={headerRows} onChange={(rows) => { setHeaderRows(rows); setHeadersTouched(true); invalidateTest(); }} />}
         {available.length > 0
           ? <div className="mcp-discovered">

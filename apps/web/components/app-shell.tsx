@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSelectedLayoutSegments } from "next/navigation";
 import { ReactNode, useEffect, useLayoutEffect, useState } from "react";
-import { BarChart3, Bot, Building2, CreditCard, Inbox, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, Sparkles, Wallet, X } from "lucide-react";
+import { BarChart3, Bot, Building2, CreditCard, Inbox, LayoutDashboard, Menu, PanelLeftClose, PanelLeftOpen, Search, Settings, Sparkles, Wallet, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useLanguage, type I18nKey } from "@/lib/i18n";
 import { CommunityLinks } from "@/components/community-links";
+import { UserMenu } from "@/components/user-menu";
+import { CommandPalette } from "@/components/command-palette";
 import { appShellExtensions } from "@/lib/extensions/app-shell";
+import { CurrentUserContext, isManager } from "@/lib/current-user";
 import type { User } from "@/types";
 
 const navigation: { href: string; labelKey: I18nKey; icon: typeof LayoutDashboard }[] = [
@@ -16,8 +19,15 @@ const navigation: { href: string; labelKey: I18nKey; icon: typeof LayoutDashboar
   { href: "/agents", labelKey: "nav.agents", icon: Bot },
   { href: "/inbox", labelKey: "nav.inbox", icon: Inbox },
   { href: "/reports", labelKey: "nav.reports", icon: BarChart3 },
+  { href: "/sandbox", labelKey: "nav.sandbox", icon: Sparkles },
 ];
 // Settings closes the list, after whatever a deployment adds.
+// "⌘K" on Apple devices, "Ctrl K" elsewhere.
+function shortcutLabel() {
+  if (typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)) return "⌘K";
+  return "Ctrl K";
+}
+
 const settingsEntry = { href: "/settings", labelKey: "nav.settings" as I18nKey, icon: Settings };
 
 // The sidebar can fold to its icons; the choice is kept per browser.
@@ -57,6 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(pathname !== "/login");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   useLayoutEffect(() => {
     try { setCollapsed(localStorage.getItem(COLLAPSED_KEY) === "1"); } catch {}
   }, []);
@@ -66,12 +77,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     try { localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0"); } catch {}
   }
   const isLogin = pathname === "/login";
-  const isPortal = pathname.startsWith("/portal/");
-  const isWidget = pathname.startsWith("/widget/");
+  // The rendered route, not the address: a portal served on a client's own
+  // domain is rewritten to /portal/<slug> by the proxy while the address stays
+  // "/" or "/inbox", and the portal page keeps it there. Judged by the address
+  // alone, the shell would ask for the agency session, get a 401 and send the
+  // signed-in portal user to /login, which rewrites back to the portal.
+  const [rootSegment] = useSelectedLayoutSegments();
+  const isPortal = pathname.startsWith("/portal/") || rootSegment === "portal";
+  const isWidget = pathname.startsWith("/widget/") || rootSegment === "widget";
+  const isInvite = pathname.startsWith("/invite/");
   const isExtraPublic = EXTRA_PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
-  const isBare = isLogin || isPortal || isWidget || isExtraPublic;
+  const isBare = isLogin || isPortal || isWidget || isInvite || isExtraPublic;
 
   // Check the session on entry and revalidate it on every navigation, without
   // taking the shell off screen to do it: `loading` starts true and is only ever
@@ -83,7 +101,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (isBare) { setLoading(false); setUser(null); return; }
     let cancelled = false;
     api<User>("/auth/me")
-      .then((current) => { if (!cancelled) setUser(current); })
+      .then((current) => {
+        if (cancelled) return;
+        setUser(current);
+        // The agency asks everyone for two-step verification: until it is on,
+        // Security is the only place to go.
+        if (current.agency.require_two_factor && !current.two_factor_enabled && pathname !== "/settings/security") router.replace("/settings/security");
+      })
       .catch(() => { if (!cancelled) { setUser(null); router.replace("/login"); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -99,7 +123,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   if (isBare) return <>{children}</>;
-  if (loading || !user) return <div className="app-loader"><span className="opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><span>{t("shell.loading")}</span></div>;
+  if (loading || !user) return <div className="app-loader"><span className="brand-icon"><img src="/brand/agentaria-mark.svg" alt="" /></span><span>{t("shell.loading")}</span></div>;
 
   const workspaceLabel = <div className="sidebar-workspace">{user.agency.logo_url ? <img src={user.agency.logo_url} alt="" /> : <Building2 size={14} />}<span>{user.agency.name}</span></div>;
   const WorkspaceLabel = appShellExtensions.WorkspaceLabel;
@@ -111,13 +135,16 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
         <button type="button" className="sidebar-toggle" onClick={toggleCollapsed} aria-label={collapsed ? t("shell.expandMenu") : t("shell.collapseMenu")} title={collapsed ? t("shell.expandMenu") : t("shell.collapseMenu")}>{collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}</button>
         <div className="brand-row">
-          <Link href="/" className="brand"><span className="opennexus-icon"><img src="/brand/opennexus-mark.svg" alt="" /></span><span>OpenNexus</span></Link>
+          <Link href="/" className="brand"><span className="brand-icon"><img src="/brand/agentaria-mark.svg" alt="" /></span><span>Agentaria</span></Link>
           <button className="sidebar-close" onClick={() => setMobileOpen(false)} aria-label={t("shell.closeMenu")}><X /></button>
         </div>
         {WorkspaceLabel ? <WorkspaceLabel user={user}>{workspaceLabel}</WorkspaceLabel> : workspaceLabel}
+        <button type="button" className="sidebar-search" onClick={() => { setMobileOpen(false); setPaletteOpen(true); }} title={t("palette.title")} aria-label={t("palette.title")}>
+          <Search size={15} /><span>{t("palette.button")}</span><kbd>{shortcutLabel()}</kbd>
+        </button>
         <nav>
           <span className="nav-label">{t("nav.section")}</span>
-          {navigation.map((item) => {
+          {navigation.filter((item) => item.href !== "/sandbox" || isManager(user.role)).map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return <Link key={item.href} href={item.href} className={active ? "active" : ""} title={t(item.labelKey)} onClick={() => setMobileOpen(false)}><item.icon size={18} /><span>{t(item.labelKey)}</span></Link>;
           })}
@@ -126,18 +153,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             const active = pathname.startsWith(item.href);
             return <Link key={item.href} href={item.href} className={active ? "active" : ""} title={item.label} onClick={() => setMobileOpen(false)}><Icon size={18} /><span>{item.label}</span></Link>;
           })}
+          {user.agency.billing_enabled && user.role === "owner" && <Link href="/billing" className={pathname.startsWith("/billing") ? "active" : ""} title={t("nav.billing")} onClick={() => setMobileOpen(false)}><CreditCard size={18} /><span>{t("nav.billing")}</span></Link>}
           <Link href={settingsEntry.href} className={pathname.startsWith(settingsEntry.href) ? "active" : ""} title={t(settingsEntry.labelKey)} onClick={() => setMobileOpen(false)}><settingsEntry.icon size={18} /><span>{t(settingsEntry.labelKey)}</span></Link>
         </nav>
         <div className="sidebar-bottom">
           <CommunityLinks onNavigate={() => setMobileOpen(false)} />
-          <div className="sidebar-foot">
-            <div className="user-avatar">{user.name.slice(0, 1).toUpperCase()}</div>
-            <div className="user-meta"><strong>{user.name}</strong><span>{user.email}</span></div>
-            <button className="icon-button inverse" onClick={logout} title={t("shell.logout")}><LogOut size={17} /></button>
-          </div>
+          <UserMenu name={user.name} detail={user.email} onLogout={logout} />
         </div>
       </aside>
-      <main className="main-content">{children}</main>
+      <CommandPalette user={user} open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <main className="main-content"><CurrentUserContext.Provider value={user}>{children}</CurrentUserContext.Provider></main>
     </div>
   );
 }
