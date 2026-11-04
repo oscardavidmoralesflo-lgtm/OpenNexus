@@ -24,6 +24,9 @@ Everything you need to build, brand and operate AI agents for your clients.
 - [Agents](en/agents.md) — Instructions, context, models and multimodal capabilities.
 - [Knowledge base](en/knowledge-base.md) — Manual context, Q&A pairs, PDFs and semantic retrieval.
 - [AI providers](en/ai-providers.md) — Connect your OpenRouter key and pick per-agent models from any vendor.
+- [Appointment booking](en/booking.md) — Bookable hours per client, agents that book and cancel in the chat, and reminders.
+- [Sales pipeline](en/sales-pipeline.md) — A board of each client's contacts by stage, kept up to date by the agents.
+- [WhatsApp campaigns](en/campaigns.md) — An approved template to a chosen list of contacts, with who read and replied.
 - [Reports](en/reports.md) — What every reply cost, by client, agent, model and day, with CSV export.
 - [Custom tools](en/custom-tools.md) — Let agents call HTTP endpoints and MCP servers during a conversation.
 - [AI agents over MCP](en/mcp-server.md) — Connect Claude Code, Cursor or Codex to the workspace with a personal token.
@@ -71,6 +74,9 @@ Todo lo que necesitas para construir, marcar y operar agentes de IA para tus cli
 - [Agentes](es/agents.md) — Instrucciones, contexto, modelos y capacidades multimodales.
 - [Base de conocimiento](es/knowledge-base.md) — Contexto manual, pares de preguntas y respuestas, PDFs y recuperación semántica.
 - [Proveedores de IA](es/ai-providers.md) — Conecta tu clave de OpenRouter y elige modelos de cualquier proveedor por agente.
+- [Agenda de citas](es/booking.md) — Horarios por cliente, agentes que agendan y cancelan en el chat, y recordatorios.
+- [Embudo de ventas](es/sales-pipeline.md) — Un tablero de los contactos de cada cliente por etapa, que los agentes mantienen al día.
+- [Campañas de WhatsApp](es/campaigns.md) — Una plantilla aprobada a una lista de contactos elegida, con quién leyó y respondió.
 - [Reportes](es/reports.md) — Lo que costó cada respuesta, por cliente, agente, modelo y día, con exportación CSV.
 - [Herramientas personalizadas](es/custom-tools.md) — Permite que los agentes llamen endpoints HTTP y servidores MCP durante una conversación.
 - [Agentes de IA por MCP](es/mcp-server.md) — Conecta Claude Code, Cursor o Codex al espacio de trabajo con un token personal.

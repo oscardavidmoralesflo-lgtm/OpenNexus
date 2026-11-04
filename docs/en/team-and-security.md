@@ -34,7 +34,9 @@ to Security and can use nothing else until they do.
 
 **Settings → Security → Password** changes your own password; it asks for the current one.
 
-There is no reset by email. If the owner loses the password, run this on the server and sign in with the password it prints once (the change shows in the activity log):
+**Forgot your password?** on the sign-in page e-mails a link to choose a new one, once outgoing e-mail is set up with the `SMTP_*` variables (see [configuration](configuration.md)). The link expires in 30 minutes, works once, and leaves two-step verification on. The request and the change both show in the activity log.
+
+Without e-mail, or when the mailbox is lost too, run this on the server and sign in with the password it prints once (the change shows in the activity log):
 
 ```bash
 docker compose --env-file .env.docker exec api python -m app.account_admin users

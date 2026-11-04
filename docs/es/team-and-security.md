@@ -35,7 +35,9 @@ Seguridad y no puede usar nada más hasta configurarla.
 
 **Configuración → Seguridad → Contraseña** cambia tu propia contraseña; pide la actual.
 
-No hay recuperación por correo. Si el propietario pierde la contraseña, ejecuta esto en el servidor y entra con la contraseña que imprime una sola vez (el cambio queda en el registro de actividad):
+**¿Olvidaste tu contraseña?** en la pantalla de entrada envía por correo un enlace para elegir una nueva, una vez configurado el correo saliente con las variables `SMTP_*` (ver [configuración](configuration.md)). El enlace vence en 30 minutos, sirve una sola vez y deja activa la verificación en dos pasos. La solicitud y el cambio quedan en el registro de actividad.
+
+Sin correo, o si también se perdió el buzón, ejecuta esto en el servidor y entra con la contraseña que imprime una sola vez (el cambio queda en el registro de actividad):
 
 ```bash
 docker compose --env-file .env.docker exec api python -m app.account_admin users

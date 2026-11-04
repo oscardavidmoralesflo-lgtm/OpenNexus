@@ -747,3 +747,37 @@ export type AgentTestCase = {
 };
 
 export type AgentTestSuite = { cases: AgentTestCase[]; pass_score: number; passed: number; failed: number; not_run: number };
+
+export type BookingSettings = {
+  enabled: boolean; duration_minutes: number; slots: ScheduleSlot[]; capacity: number; min_notice_minutes: number;
+  max_days_ahead: number; location: string; reminder_enabled: boolean; reminder_hours: number;
+};
+export type AppointmentStatus = "confirmed" | "cancelled" | "completed" | "no_show";
+export type Appointment = {
+  id: string; name: string; phone: string; notes: string; starts_at: string; ends_at: string; status: AppointmentStatus;
+  source: "agent" | "team"; agent_name: string | null; conversation_id: string | null; reminder_due_at: string | null;
+  reminder_sent_at: string | null; reminder_error: string | null; created_at: string;
+};
+
+export type PipelineStage = "new" | "qualified" | "booked" | "won" | "lost";
+export type PipelineCard = {
+  id: string; name: string; phone: string | null; email: string | null; stage: PipelineStage; deal_value: number | null;
+  stage_changed_at: string | null; last_conversation_id: string | null; last_activity_at: string; last_channel: string | null;
+  tags: { name: string; color: string }[];
+};
+export type PipelineBoard = { enabled: boolean; stages: { stage: PipelineStage; total: number; value: number; contacts: PipelineCard[] }[] };
+
+export type CampaignStatus = "draft" | "scheduled" | "sending" | "done" | "cancelled";
+export type CampaignStats = { total: number; pending: number; sent: number; failed: number; delivered: number; read: number; replied: number };
+export type CampaignAudience = { tag_ids?: string[]; stages?: PipelineStage[] };
+export type Campaign = {
+  id: string; name: string; channel_id: string | null; channel_label: string;
+  template_name: string; template_language: string; variables: Record<string, string>; header_value: string;
+  audience: CampaignAudience; status: CampaignStatus;
+  scheduled_at: string | null; started_at: string | null; finished_at: string | null;
+  last_error: string | null; created_at: string; stats: CampaignStats;
+};
+export type CampaignRecipient = {
+  id: string; name: string; phone: string; status: "pending" | "sent" | "failed"; error: string | null;
+  conversation_id: string | null; sent_at: string | null;
+};

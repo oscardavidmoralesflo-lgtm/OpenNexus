@@ -27,6 +27,8 @@ from ..services.attachments import (
     store_attachment,
 )
 from ..services.tools import run_completion
+from ..services.booking import BookingChanges, build_booking_specs
+from ..services.pipeline import StageChanges, build_stage_spec
 from ..services.capture import build_capture_spec, capture_context, field_definitions
 from ..services.media_library import build_media_spec, media_prompt
 from ..services.knowledge import build_system_prompt, llm_turns, retrieve_knowledge
@@ -274,11 +276,19 @@ async def _generate_reply(
     media_spec = build_media_spec(db, agent)
     if media_spec:
         system_content += "\n\n" + media_prompt(agent)
+    # The appointment book is rehearsed too: real free times, but nothing is
+    # booked from the playground.
+    booking_specs, booking_rules = build_booking_specs(db, agent, refreshed, BookingChanges())
+    if booking_rules:
+        system_content += "\n\n" + booking_rules
+    stage_spec, stage_rules = build_stage_spec(db, agent, refreshed, StageChanges())
+    if stage_rules:
+        system_content += "\n\n" + stage_rules
     messages = [{"role": "system", "content": system_content}, *history]
     base_url, api_key = credentials
     completion = await run_completion(
         db, agent, base_url, api_key, messages, temperature=agent.temperature, max_tokens=agent.max_tokens,
-        extra_specs=[spec for spec in (capture_spec, media_spec) if spec] or None,
+        extra_specs=[*(spec for spec in (capture_spec, media_spec) if spec), *booking_specs, *([stage_spec] if stage_spec else [])] or None,
     )
     note_reply(conversation)
     reply = Message(

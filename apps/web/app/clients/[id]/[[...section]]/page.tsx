@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Bot, Copy, ExternalLink, FileBarChart, FileText, Globe2, ImagePlus, ListChecks, LoaderCircle, MessageCircle, Pencil, QrCode, Radio, Save, Settings2, ShieldAlert, ShieldCheck, Tag, Trash2, UserCheck, UserRound, Users, UserX, Webhook } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bot, CalendarDays, KanbanSquare, Megaphone, Copy, ExternalLink, FileBarChart, FileText, Globe2, ImagePlus, ListChecks, LoaderCircle, MessageCircle, Pencil, QrCode, Radio, Save, Settings2, ShieldAlert, ShieldCheck, Tag, Trash2, UserCheck, UserRound, Users, UserX, Webhook } from "lucide-react";
 import { NewAgentMenu } from "@/components/new-agent-menu";
+import { BookingPanel } from "@/components/booking-panel";
+import { PipelineBoard } from "@/components/pipeline-board";
+import { CampaignsPanel } from "@/components/campaigns-panel";
 import { Alert, EmptyState, Modal, StatusBadge } from "@/components/ui";
 import { SectionTabs } from "@/components/section-tabs";
 import { IndustryPicker, isBusinessComplete, type IndustryValue } from "@/components/industry-picker";
@@ -32,8 +35,8 @@ import { useLanguage, useT } from "@/lib/i18n";
 import { businessLabel, useIndustries } from "@/lib/industries";
 import type { Client, ClientDomain, PhoneLine, PortalRole, PortalUser, SocialChannel, WhatsAppChannel, WhatsAppCloudChannel, WidgetChannel } from "@/types";
 
-type Tab = "details" | "agents" | "channels" | "teams" | "tags" | "fields" | "templates" | "webhooks" | "portal";
-const TABS: Tab[] = ["details", "agents", "channels", "teams", "tags", "fields", "templates", "webhooks", "portal"];
+type Tab = "details" | "agents" | "channels" | "booking" | "pipeline" | "campaigns" | "teams" | "tags" | "fields" | "templates" | "webhooks" | "portal";
+const TABS: Tab[] = ["details", "agents", "channels", "booking", "pipeline", "campaigns", "teams", "tags", "fields", "templates", "webhooks", "portal"];
 type ChannelKey = "whatsapp_cloud" | "whatsapp" | "webchat" | "instagram" | "messenger" | "phone";
 /** A channel's setup view, named in the address as `/channels/<kind>`. */
 type ChannelKind = "whatsapp-cloud" | "whatsapp" | "webchat" | "instagram" | "messenger" | "phone";
@@ -190,6 +193,9 @@ export default function ClientDetailPage() {
       { id: "details", label: t("clients.detail.tabDetails"), icon: Settings2 },
       { id: "agents", label: t("clients.detail.tabAgents"), icon: Bot, badge: client.agents.length },
       { id: "channels", label: t("clients.detail.tabChannels"), icon: Radio },
+      { id: "booking", label: t("clients.booking.tab"), icon: CalendarDays },
+      { id: "pipeline", label: t("clients.pipeline.tab"), icon: KanbanSquare },
+      { id: "campaigns", label: t("clients.campaigns.tab"), icon: Megaphone },
       { id: "teams", label: t("clients.detail.tabTeams"), icon: Users },
       { id: "tags", label: t("clients.detail.tabTags"), icon: Tag },
       { id: "fields", label: t("clients.detail.tabFields"), icon: ListChecks },
@@ -230,6 +236,9 @@ export default function ClientDetailPage() {
     {tab === "tags" && <div className="embedded-portal-view"><TagsView base={`/clients/${client.id}/contact-tags`} canManage /></div>}
     {tab === "fields" && <div className="embedded-portal-view"><ContactFieldsView base={`/clients/${client.id}/contact-fields`} /></div>}
     {tab === "templates" && <div className="embedded-portal-view"><TemplatesView base={`/clients/${client.id}`} /></div>}
+    {tab === "pipeline" && <PipelineBoard clientId={client.id} />}
+    {tab === "campaigns" && <CampaignsPanel clientId={client.id} />}
+    {tab === "booking" && <BookingPanel clientId={client.id} timezone={client.timezone} />}
     {tab === "webhooks" && <div className="embedded-portal-view"><TemplateWebhooksView base={`/clients/${client.id}`} agents={client.agents} /></div>}
     {tab === "portal" && <><form className="page-form" onSubmit={savePortal}><section className="form-section"><div className="section-copy"><h2>{t("clients.detail.portalTitle")}</h2><p>{t("clients.detail.portalCopy")}</p></div><div className="form-fields"><label>{t("clients.detail.portalTitleLabel")}<input name="portal_title" defaultValue={client.portal_title} placeholder={t("clients.detail.portalTitlePlaceholder", { name: client.name })} /></label><label>{t("clients.detail.portalUrl")}<div className="slug-input"><span>{origin.replace(/^https?:\/\//, "")}/portal/</span><input name="portal_slug" defaultValue={client.portal_slug} /></div></label><div className="url-preview"><code>{portalUrl}</code><button type="button" onClick={() => navigator.clipboard.writeText(portalUrl)}><Copy size={15} /> {t("clients.detail.copy")}</button>{client.portal_enabled && <a href={portalUrl} target="_blank"><ExternalLink size={15} /> {t("clients.detail.open")}</a>}</div><label className="switch-row"><span><strong>{t("clients.detail.publishPortal")}</strong><small>{t("clients.detail.publishPortalHint")}</small></span><input name="portal_enabled" type="checkbox" defaultChecked={client.portal_enabled} /></label></div></section><div className="form-footer"><button className="button primary" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />} {t("clients.detail.savePortal")}</button></div></form><PortalUsers clientId={client.id} /><PortalDomain clientId={client.id} domain={domain} onChange={setDomain} /></>}
   </div>;

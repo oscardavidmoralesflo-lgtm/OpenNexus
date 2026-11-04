@@ -129,6 +129,8 @@ class Client(Base):
     portal_domain: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     portal_domain_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     portal_domain_token: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    # The sales pipeline: agents move contacts through its stages.
+    pipeline_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
@@ -777,6 +779,12 @@ class Contact(Base):
     # A blocked contact talks to a wall: their messages are stored but nobody
     # answers, nothing rings, and their conversations leave the inboxes.
     blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Where the contact stands in the client's sales pipeline
+    # (services.pipeline.STAGES); None reads as "new".
+    stage: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    stage_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # What the deal is worth, in the client's own currency.
+    deal_value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
@@ -1550,3 +1558,117 @@ class AgentTestCase(Base):
     last_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class BookingSettings(Base):
+    """A client's appointment book: the weekly hours appointments can start
+    in, how long each one lasts, and the reminder sent before it. With
+    ``enabled`` on, every agent of the client can offer times and book them."""
+
+    __tablename__ = "booking_settings"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    # Weekly hours, the same slot shape as an agent's schedule
+    # (services.availability), read in the client's timezone.
+    slots: Mapped[list] = mapped_column(JSON, default=list)
+    # How many appointments may share the same time (people who attend).
+    capacity: Mapped[int] = mapped_column(Integer, default=1)
+    min_notice_minutes: Mapped[int] = mapped_column(Integer, default=120)
+    max_days_ahead: Mapped[int] = mapped_column(Integer, default=30)
+    # Address or instructions the confirmation and the reminder carry.
+    location: Mapped[str] = mapped_column(Text, default="")
+    reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    reminder_hours: Mapped[int] = mapped_column(Integer, default=24)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class Appointment(Base):
+    """One booked time with a client's business, made by an agent in a
+    conversation or by the team from the dashboard."""
+
+    __tablename__ = "appointments"
+    __table_args__ = (Index("ix_appointments_client_starts", "client_id", "starts_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"))
+    agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id", ondelete="SET NULL"), nullable=True)
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(180), default="")
+    phone: Mapped[str] = mapped_column(String(40), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # confirmed | cancelled | completed | no_show
+    status: Mapped[str] = mapped_column(String(20), default="confirmed")
+    # agent | team
+    source: Mapped[str] = mapped_column(String(20), default="agent")
+    # When the reminder goes out; cleared once it is sent or no longer due.
+    reminder_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reminder_error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    conversation: Mapped["Conversation | None"] = relationship()
+
+
+class Campaign(Base):
+    """A WhatsApp broadcast: one approved template sent to a filtered list of
+    a client's contacts, from one WhatsApp API number. Replies land in each
+    contact's conversation, where the number's agent answers them."""
+
+    __tablename__ = "campaigns"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    agency_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("agencies.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    whatsapp_cloud_channel_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("whatsapp_cloud_channels.id", ondelete="SET NULL"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    template_name: Mapped[str] = mapped_column(String(512))
+    template_language: Mapped[str] = mapped_column(String(10))
+    # Body variable -> value; a value may hold {name} or {first_name}.
+    variables: Mapped[dict] = mapped_column(JSON, default=dict)
+    header_value: Mapped[str] = mapped_column(Text, default="")
+    # Who receives it: {"tag_ids": [...], "stages": [...]}; empty lists mean everyone.
+    audience: Mapped[dict] = mapped_column(JSON, default=dict)
+    # draft | scheduled | sending | done | cancelled
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+    client: Mapped[Client] = relationship()
+    channel: Mapped["WhatsAppCloudChannel | None"] = relationship()
+
+
+class CampaignRecipient(Base):
+    """One contact a campaign goes to, and how that send went."""
+
+    __tablename__ = "campaign_recipients"
+    __table_args__ = (UniqueConstraint("campaign_id", "contact_id", name="uq_campaign_recipients_contact"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_uuid)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"), index=True)
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True)
+    phone: Mapped[str] = mapped_column(String(40))
+    name: Mapped[str] = mapped_column(String(180), default="")
+    # pending | sent | failed
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    conversation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
+    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
