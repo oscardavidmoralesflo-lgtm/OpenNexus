@@ -673,9 +673,17 @@ textarea { line-height: 1.55; }
 .qa-item > div { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .qa-item strong { font-size: 13px; }
 .qa-item small { color: var(--muted); font-size: 12px; }
-.widget-shell { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--surface); font-size: 14px; overflow: hidden; }
+.widget-shell { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--widget-bg, var(--surface)); font-size: 14px; overflow: hidden; }
+.widget-shell.is-inline { box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--widget-radius, 16px); }
+.widget-shell.is-inline.is-start { position: static; }
+.widget-shell.is-inline.is-start .widget-messages { flex: 0 0 auto; overflow: visible; padding-bottom: 4px; background: transparent; }
+.widget-shell.is-inline.is-start .widget-composer { padding-top: 8px; border-top: 0; background: transparent; }
 .widget-empty { flex: 1; display: grid; place-items: center; color: var(--muted); }
-.widget-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; color: white; background: var(--widget-color, var(--accent)); }
+.widget-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; color: var(--widget-on-color, white); background: var(--widget-color, var(--accent)); }
+.head-plain .widget-head { color: var(--widget-ink, var(--ink)); background: transparent; }
+.head-plain .widget-avatar { color: var(--widget-on-color, white); background: var(--widget-color, var(--accent)); }
+.head-plain .widget-head-btn { color: var(--widget-muted, var(--muted)); background: transparent; }
+.head-plain .widget-head-btn:hover { background: rgba(var(--shadow-rgb), .08); }
 .widget-head-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .widget-head-id img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--surface); }
 .widget-avatar { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.22); font-weight: 700; }
@@ -685,22 +693,28 @@ textarea { line-height: 1.55; }
 .widget-head-actions { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; }
 .widget-head-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: rgba(255,255,255,.18); color: white; border-radius: 8px; cursor: pointer; }
 .widget-head-btn:hover { background: rgba(255,255,255,.3); }
-.widget-messages { flex: 1 1 auto; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--canvas); }
+.widget-messages { flex: 1 1 auto; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: var(--widget-bg, var(--canvas)); }
+.widget-headline { margin: 0 0 4px; color: var(--widget-ink, var(--ink)); font-family: var(--font-display); font-size: 20px; font-weight: 600; line-height: 1.3; }
+.widget-headline.serif { font-family: Georgia, "Times New Roman", serif; font-weight: 500; }
+.widget-suggestions { display: flex; flex-wrap: wrap; gap: 7px; }
+.widget-suggestions button { padding: 7px 13px; color: var(--ink); border: 1px solid var(--line); border-radius: calc(var(--widget-radius, 16px) * 2); background: var(--surface); font-size: 13px; cursor: pointer; }
+.widget-suggestions button:hover:not(:disabled) { border-color: var(--widget-color, var(--accent)); }
+.widget-footnote { flex: 0 0 auto; padding: 0 14px 10px; color: var(--widget-muted, var(--muted)); font-size: 12px; }
 .widget-msg { display: flex; }
 .widget-msg.user { justify-content: flex-end; }
 .widget-bubble { max-width: 82%; padding: 9px 12px; border-radius: 14px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
 .widget-msg.assistant .widget-bubble { background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
-.widget-msg.user .widget-bubble { background: var(--widget-color, var(--accent)); color: white; border-bottom-right-radius: 4px; }
+.widget-msg.user .widget-bubble { background: var(--widget-color, var(--accent)); color: var(--widget-on-color, white); border-bottom-right-radius: 4px; }
 .widget-typing { display: inline-flex; gap: 4px; }
 .widget-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--surface-5); animation: widget-blink 1.2s infinite; }
 .widget-typing i:nth-child(2) { animation-delay: .2s; }
 .widget-typing i:nth-child(3) { animation-delay: .4s; }
 @keyframes widget-blink { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
 .widget-error { padding: 6px 14px; color: var(--red); font-size: 12px; background: var(--red-soft); }
-.widget-composer { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--surface); }
-.widget-composer input { flex: 1 1 auto; height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 20px; font-size: 14px; }
+.widget-composer { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--line); background: var(--widget-bg, var(--surface)); }
+.widget-composer input { flex: 1 1 auto; height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: calc(var(--widget-radius, 16px) * 1.25); font-size: 14px; }
 .widget-composer input:focus { outline: none; border-color: var(--widget-color, var(--accent)); }
-.widget-composer button { flex: 0 0 auto; width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%; color: white; background: var(--widget-color, var(--accent)); cursor: pointer; }
+.widget-composer button { flex: 0 0 auto; width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: calc(var(--widget-radius, 16px) * 1.25); color: var(--widget-on-color, white); background: var(--widget-color, var(--accent)); cursor: pointer; }
 .widget-composer button:disabled { opacity: .55; }
 .embed-snippet { margin: 0; padding: 13px 15px; border: 1px solid var(--line); border-radius: 9px; background: var(--inverse); color: var(--on-dark); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
 .embed-actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -792,7 +806,16 @@ textarea { line-height: 1.55; }
 
 .portal-loader { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); background: var(--canvas); }
 .portal-brand { display: flex; align-items: center; gap: 10px; }
-.portal-brand span, .portal-brand img { width: 34px; height: 34px; display: grid; place-items: center; object-fit: contain; color: white; border-radius: 8px; background: var(--portal-color, var(--accent)); font-weight: 700; }
+.portal-brand span, .portal-brand img { width: 34px; height: 34px; display: grid; place-items: center; object-fit: contain; color: var(--ink); border-radius: 8px; background: var(--surface-3); font-weight: 700; }
+/* The agency's color never fills behind its logo or initial: a transparent
+   mark takes that color and gets lost in it. A logo shows as uploaded, an
+   initial sits on a neutral tile. The color only reaches the sign-in button
+   and a few small labels; the chat keeps the portal's own blue. */
+.portal-brand img { background: none; }
+/* The brand color as text, darkened or lightened by lib/brand-palette until it
+   reads on the page in each theme. */
+.portal-app, .portal-access { --portal-text: var(--portal-text-light, var(--accent-text)); }
+:root[data-theme="dark"] .portal-app, :root[data-theme="dark"] .portal-access { --portal-text: var(--portal-text-dark, var(--accent-text)); }
 .portal-login { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); }
 .portal-login > section { padding: 48px 7vw; display: flex; flex-direction: column; color: white; background: var(--inverse); }
 .portal-login-copy { max-width: 540px; margin: auto 0; }
@@ -801,7 +824,9 @@ textarea { line-height: 1.55; }
 .portal-login-copy p { color: var(--faint); font-size: 16px; }
 .portal-login-form { display: grid; place-items: center; padding: 40px; background: var(--surface-2); }
 .portal-login-form form { width: min(430px, 100%); padding: 34px; display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 12px 35px rgba(var(--shadow-rgb), calc(.08 * var(--shadow-k))); }
-.portal-client-avatar { width: 48px; height: 48px; display: grid; place-items: center; color: var(--portal-color); border-radius: 9px; background: var(--accent-soft); font-weight: 700; }
+.portal-client-avatar { width: 48px; height: 48px; display: grid; place-items: center; color: var(--ink); border-radius: 9px; background: var(--surface-3); font-weight: 700; }
+.portal-client-avatar.has-logo { background: transparent; }
+.portal-client-avatar img { width: 100%; height: 100%; object-fit: contain; border-radius: inherit; }
 .portal-login-form h2 { margin: 2px 0 -12px; font-size: 24px; }
 .portal-login-form p { color: var(--muted); }
 .portal-app { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0,1fr); background: var(--canvas); }
@@ -868,6 +893,7 @@ textarea { line-height: 1.55; }
 .portal-main > header { margin-bottom: 22px; display: flex; align-items: flex-end; justify-content: space-between; }
 .portal-main > header h1 { margin: 3px 0 0; font-size: 28px; }
 .portal-main > header small, .portal-main > header span { color: var(--muted); }
+.portal-main > header > div > small { color: var(--portal-text, var(--muted)); }
 .portal-inbox { height: calc(100vh - 125px); display: grid; grid-template-columns: 360px minmax(0,1fr); overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .portal-inbox > aside { overflow: auto; border-right: 1px solid var(--line); background: var(--surface-2); }
 /* The search row and the thread header share their bottom line: same height. */
@@ -1114,11 +1140,12 @@ textarea { line-height: 1.55; }
 .portal-messages article.mine { align-self: flex-end; }
 .portal-messages small { color: var(--subtle); font-size: 12px; }
 .portal-messages p { margin: 4px 0 0; padding: 11px 13px; border-radius: 4px 11px 11px; background: var(--surface-3); }
-.portal-messages article.mine p { color: white; border-radius: 11px 4px 11px 11px; background: var(--portal-color); }
+.portal-messages article.mine p { color: white; border-radius: 11px 4px 11px 11px; background: var(--accent); }
 /* The business sits on the right, like "me" in any chat. A person's reply
-   takes the brand colour; the AI's takes a light tint of it, so who spoke
-   reads at a glance without the name label. */
-.portal-messages article.mine.ai p { color: var(--ink); background: color-mix(in srgb, var(--portal-color) 12%, var(--surface)); }
+   takes the portal's blue; the AI's takes a light tint of it, so who spoke
+   reads at a glance without the name label. The thread keeps that blue
+   whatever color the agency picks: it is read all day. */
+.portal-messages article.mine.ai p { color: var(--ink); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .portal-messages article.mine.ai .quoted-snippet { background: rgba(var(--shadow-rgb), calc(.06 * var(--shadow-k))); }
 .portal-messages article.mine.ai .rich-text code { background: rgba(var(--shadow-rgb), calc(.08 * var(--shadow-k))); }
 .portal-messages article.mine.ai .msg-time { color: var(--subtle); }
@@ -1132,7 +1159,7 @@ textarea { line-height: 1.55; }
 .quoted-snippet strong { display: block; font-size: 11.5px; opacity: .8; }
 .portal-messages article.mine .quoted-snippet, .inbox-message.mine .quoted-snippet { background: rgba(255, 255, 255, .18); }
 /* The customer's reaction on the business's own bubble. */
-.reaction-badge.incoming { background: color-mix(in srgb, var(--portal-color, var(--blue)) 10%, var(--surface)); }
+.reaction-badge.incoming { background: color-mix(in srgb, var(--blue) 10%, var(--surface)); }
 /* Hover actions on a bubble: react to the visitor's message, reply quoting any. */
 .portal-messages article { position: relative; }
 .bubble-actions { position: absolute; top: -6px; right: -4px; display: inline-flex; gap: 2px; padding: 2px; background: var(--surface, var(--surface)); border: 1px solid rgba(var(--shadow-rgb), calc(.12 * var(--shadow-k))); border-radius: 999px; box-shadow: 0 1px 4px rgba(var(--shadow-rgb), calc(.15 * var(--shadow-k))); opacity: 0; transition: opacity .12s ease; z-index: 2; }
@@ -1145,7 +1172,7 @@ textarea { line-height: 1.55; }
 .reaction-picker button:hover, .reaction-picker button.active { background: rgba(var(--shadow-rgb), calc(.08 * var(--shadow-k))); }
 .reaction-picker button.remove { font-size: 12px; color: var(--red-text); padding: 2px 8px; }
 /* Quoted-reply chip above the composer. */
-.composer-quote { display: flex; align-items: center; gap: 9px; margin: 0 16px; padding: 7px 11px; font-size: 12.5px; color: var(--ink, var(--ink)); border-left: 3px solid var(--portal-color, var(--blue)); border-radius: 6px; background: rgba(var(--shadow-rgb), calc(.05 * var(--shadow-k))); }
+.composer-quote { display: flex; align-items: center; gap: 9px; margin: 0 16px; padding: 7px 11px; font-size: 12.5px; color: var(--ink, var(--ink)); border-left: 3px solid var(--blue); border-radius: 6px; background: rgba(var(--shadow-rgb), calc(.05 * var(--shadow-k))); }
 .composer-quote > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .composer-quote strong { font-size: 11.5px; opacity: .75; }
 .composer-quote small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1369,7 +1396,7 @@ textarea { line-height: 1.55; }
 .report-selects select { width: auto; height: 36px; min-height: 0; min-width: 140px; padding: 0 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13px; cursor: pointer; }
 .report-ranges { display: flex; gap: 6px; flex: 0 0 auto; }
 .report-ranges button { padding: 7px 14px; white-space: nowrap; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13px; font-weight: 600; cursor: pointer; }
-.report-ranges button.active { color: white; border-color: var(--portal-color, var(--accent)); background: var(--portal-color, var(--accent)); }
+.report-ranges button.active { color: white; border-color: var(--accent); background: var(--accent); }
 .report-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
 .report-tile { display: flex; flex-direction: column; gap: 4px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .report-tile small { color: var(--subtle); font-size: 12px; }
@@ -1405,7 +1432,7 @@ textarea { line-height: 1.55; }
 .report-toggle button { padding: 5px 12px; font-size: 12.5px; }
 @media (max-width: 900px) { .report-columns { grid-template-columns: 1fr; } }
 .portal-composer textarea { flex: 1; min-width: 0; min-height: 42px; padding: 10px 12px; }
-.portal-composer button { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; color: white; border: 0; border-radius: 7px; background: var(--portal-color); }
+.portal-composer button { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; color: white; border: 0; border-radius: 7px; background: var(--accent); }
 
 @media (max-width: 900px) {
   .sidebar { transform: translateX(-100%); box-shadow: 20px 0 50px rgba(var(--shadow-rgb), calc(.15 * var(--shadow-k))); }
@@ -1521,7 +1548,8 @@ textarea { line-height: 1.55; }
 .access-brand { display: flex; align-items: center; gap: 10px; }
 .access-brand > span, .access-brand > img { width: 32px; height: 32px; display: grid; place-items: center; object-fit: contain; color: white; border-radius: 7px; background: var(--accent); }
 .access-brand strong { color: var(--ink); font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
-.portal-access-brand > span { background: var(--portal-color, var(--accent)); }
+.portal-access-brand > span { color: var(--ink); background: var(--surface-3); }
+.portal-access-brand > img { background: none; }
 .access-layout {
   width: min(1220px, calc(100% - 56px));
   min-height: calc(100vh - 72px);
@@ -1537,8 +1565,12 @@ textarea { line-height: 1.55; }
 .app-links a { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-text); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .app-links a:hover { text-decoration: underline; }
 .access-eyebrow { color: var(--accent-text); font-size: 12px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
-.portal-access .access-eyebrow { color: var(--portal-color, var(--accent-text)); }
+.portal-access .access-eyebrow { color: var(--portal-text, var(--accent-text)); }
 .access-intro > h1 { max-width: 660px; margin: 12px 0 16px; font-size: clamp(40px, 4.5vw, 58px); font-weight: 600; line-height: 1.04; letter-spacing: -2.5px; }
+/* A portal title is whatever the agency typed: the longer it is, the smaller it
+   sets (down to a floor), and a word too long for the column breaks instead of
+   running under the login card. */
+.portal-access .access-intro > h1 { font-size: clamp(30px, min(4.5vw, calc(1400px / var(--title-chars, 16))), 58px); letter-spacing: -.04em; overflow-wrap: anywhere; text-wrap: balance; }
 .access-intro > p { max-width: 620px; margin-bottom: 30px; color: var(--muted); font-size: 16px; line-height: 1.65; }
 .access-preview { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 16px 45px rgba(var(--shadow-rgb), calc(.08 * var(--shadow-k))); }
 .access-preview > header { min-height: 54px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
@@ -1560,11 +1592,11 @@ textarea { line-height: 1.55; }
 .portal-preview-thread > div.active { background: var(--accent-soft); }
 .portal-preview > footer { min-height: 50px; padding: 0 15px; display: flex; align-items: center; justify-content: space-between; color: var(--muted); border-top: 1px solid var(--line); font-size: 12px; }
 .portal-preview > footer span { display: flex; align-items: center; gap: 6px; }
-.portal-preview > footer strong { padding: 6px 9px; color: var(--portal-color, var(--accent-text)); border: 1px solid color-mix(in srgb, var(--portal-color, var(--accent)) 35%, var(--surface)); border-radius: 6px; }
+.portal-preview > footer strong { padding: 6px 9px; color: var(--portal-text, var(--accent-text)); border: 1px solid var(--line); border-radius: 6px; }
 .access-form-wrap { padding: 56px 0; display: flex; justify-content: flex-end; }
 .access-card { width: min(440px, 100%); padding: 34px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: 0 12px 35px rgba(var(--shadow-rgb), calc(.07 * var(--shadow-k))); }
 .access-card-label { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-text); font-size: 12px; font-weight: 600; }
-.portal-access .access-card-label { color: var(--portal-color, var(--accent-text)); }
+.portal-access .access-card-label { color: var(--portal-text, var(--accent-text)); }
 .access-card > h2 { margin: 14px 0 8px; font-size: 26px; font-weight: 600; letter-spacing: -.5px; line-height: 1.2; overflow-wrap: anywhere; }
 .access-card > p { margin-bottom: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .access-card .auth-tabs { margin-top: 24px; }
@@ -1573,7 +1605,7 @@ textarea { line-height: 1.55; }
 .access-form label { display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
 .access-form input { font-size: 14px; }
 .access-card.access-form > .portal-client-avatar { margin-bottom: -4px; }
-.portal-access .button.primary { border-color: var(--portal-color, var(--accent)); background: var(--portal-color, var(--accent)); }
+.portal-access .button.primary { color: var(--portal-on, white); border-color: var(--portal-color, var(--accent)); background: var(--portal-color, var(--accent)); }
 .access-security { margin: 18px 0 0 !important; display: flex; align-items: flex-start; justify-content: center; gap: 6px; color: var(--subtle) !important; font-size: 12px !important; line-height: 1.45; }
 .access-security svg { flex: 0 0 auto; margin-top: 1px; }
 
@@ -1581,6 +1613,7 @@ textarea { line-height: 1.55; }
   .access-layout { width: min(760px, calc(100% - 44px)); grid-template-columns: 1fr; gap: 0; }
   .access-intro { padding-bottom: 22px; }
   .access-intro > h1 { font-size: 32px; }
+  .portal-access .access-intro > h1 { font-size: clamp(24px, calc(800px / var(--title-chars, 16)), 32px); }
   .access-form-wrap { padding-top: 22px; justify-content: flex-start; }
   .access-card { max-width: 520px; }
 }
@@ -1681,7 +1714,11 @@ button.back-link { padding: 0; border: 0; background: transparent; cursor: point
 .webchat-form { display: flex; flex-direction: column; gap: 16px; }
 .webchat-form label { display: flex; flex-direction: column; gap: 7px; color: var(--ink-2); font-size: 13px; font-weight: 600; }
 .webchat-form .switch-row { margin: 0; }
-.webchat-form .form-grid { max-width: 520px; }
+.webchat-suggestions { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.webchat-suggestions > span { display: flex; flex-direction: column; gap: 2px; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+.webchat-suggestions > span small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.webchat-suggestions > div { width: 100%; display: flex; align-items: center; gap: 8px; }
+.webchat-suggestions > div input { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600; }
 .wa-panel .embed-snippet { margin-top: 6px; }
 .wa-panel .embed-actions { margin-top: 12px; }
 .wa-copy-field { margin-top: 12px; display: flex; align-items: flex-end; gap: 10px; }
@@ -1756,13 +1793,28 @@ input:focus, textarea:focus, select:focus, .phone-input:focus-within { border-co
 .compact-channel-grid article > span.whatsapp { color: var(--green-text); background: var(--green-soft); }
 .compact-channel-grid article > span.webchat { color: var(--accent-text); background: var(--accent-soft); }
 .compact-channel-grid article > span.phone { color: var(--amber-text); background: var(--amber-soft); }
-/* Phone lines: the voice list with a preview button per voice. */
+/* The voice picker: a deployment's voices, one language at a time, in a list
+   that scrolls on its own so the greeting below stays in reach. */
 .voice-picker { display: grid; gap: 10px; }
-.voice-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 320px; overflow-y: auto; }
-.voice-list li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
-.voice-list li.chosen { border-color: var(--accent); background: var(--accent-soft); }
-.voice-list li span { display: grid; min-width: 0; }
-.voice-list li small { color: var(--muted); }
+.voice-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--subtle); font-size: 13px; }
+.voice-toolbar select { width: auto; min-width: 150px; }
+.voice-options { position: relative; max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.voice-option { display: flex; align-items: center; gap: 12px; padding: 9px 14px; border-top: 1px solid var(--line); }
+.voice-option:first-child { border-top: 0; }
+.voice-option.selected { background: var(--accent-soft); }
+.voice-play { width: 32px; height: 32px; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.voice-play:hover { color: var(--accent-text); border-color: var(--accent-line); }
+.voice-pick { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0; color: inherit; text-align: left; border: 0; background: transparent; cursor: pointer; }
+.voice-name { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.voice-name strong { font-size: 14px; font-weight: 600; }
+.voice-name small { color: var(--subtle); font-size: 12px; }
+.voice-tag { flex: none; padding: 3px 10px; color: var(--accent-text); border-radius: 999px; background: var(--accent-soft); font-size: 12px; white-space: nowrap; }
+.voice-option.selected .voice-tag { background: var(--surface); }
+.voice-check { flex: none; color: var(--subtle); }
+.voice-option.selected .voice-check { color: var(--accent); }
+.voice-other { margin: 0; color: var(--subtle); font-size: 13px; }
+.voice-other .text-button { font-size: 13px; }
+.voice-id-steps { margin: 0; }
 .phone-line-number { margin: 0; }
 .carrier-connected { display: grid; gap: 8px; }
 .kind-badge { margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-style: normal; font-weight: 600; color: var(--amber-text); background: var(--amber-soft); }
@@ -1804,10 +1856,9 @@ input:focus, textarea:focus, select:focus, .phone-input:focus-within { border-co
 .access-brand strong { color: var(--ink); font-family: var(--font-display); font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
 .preview-logo, .preview-icon { color: var(--accent-text); background: var(--accent-soft); }
 .access-card-label { color: var(--green-text); }
-.portal-access .access-card-label { color: var(--portal-color, var(--accent-text)); }
-.portal-access .button.primary { border-color: var(--portal-color, var(--accent)); background: var(--portal-color, var(--accent)); }
-.portal-brand span, .portal-brand img { background: var(--portal-color, var(--accent)); }
-.portal-preview > footer strong { color: var(--portal-color, var(--accent-text)); }
+.portal-access .access-card-label { color: var(--portal-text, var(--accent-text)); }
+.portal-access .button.primary { color: var(--portal-on, white); border-color: var(--portal-color, var(--accent)); background: var(--portal-color, var(--accent)); }
+.portal-preview > footer strong { color: var(--portal-text, var(--accent-text)); }
 
 
 /* Agent creation wizard (Fase 1). Built on the existing design tokens. */
@@ -2180,7 +2231,7 @@ p .msg-time, .bubble .msg-time { float: none; position: absolute; right: 11px; b
 
 
 /* Timestamp inside widget chat bubbles */
-.widget-bubble:has(> .msg-time) { position: relative; padding-right: 48px; }
+.widget-bubble:has(> .msg-time) { position: relative; padding-right: 66px; }
 .widget-bubble .msg-time { position: absolute; right: 9px; bottom: 6px; font-size: var(--text-xs); line-height: 1; color: inherit; opacity: .5; font-variant-numeric: tabular-nums; }
 
 .widget-sender { display: block; margin: 0 0 3px 6px; color: var(--muted); font-size: 11px; font-weight: 600; }
@@ -2288,7 +2339,6 @@ p .msg-time, .bubble .msg-time { float: none; position: absolute; right: 11px; b
 .portal-nav .sidebar-prefs { margin-top: auto; }
 .portal-nav .sidebar-prefs + button { margin-top: 8px; }
 .portal-nav .pref-row > div button { width: auto; }
-.portal-nav .pref-row > div button.active { color: var(--portal-color, var(--accent-text)); }
 
 /* Settings: the same rows, at page scale, one under the other. */
 .pref-list { display: flex; flex-direction: column; }
@@ -2341,13 +2391,17 @@ p .msg-time, .bubble .msg-time { float: none; position: absolute; right: 11px; b
 .portal-nav-foot .sidebar-foot { padding: 0; border-top: 0; }
 /* The portal nav is narrower than the agency's: the menu floats wider than it. */
 .portal-nav-foot .user-menu { right: auto; width: 280px; }
-.user-menu-toggle { width: 100%; color: inherit; border: 0; border-radius: 8px; background: transparent; font: inherit; text-align: left; cursor: pointer; transition: background .15s ease; }
-.user-menu-toggle:hover:not(:disabled) { background: var(--surface-3); }
-.user-menu-toggle:disabled { cursor: default; opacity: .55; }
+/* A toggle row is turned by its switch alone; the label is only a label. */
+.user-menu-toggle { width: 100%; border-radius: 8px; }
 .user-menu-toggle > span:first-child { white-space: normal; line-height: 1.25; }
 .user-menu-row > span svg.availability-icon.online { color: var(--green); }
-.user-menu-hint { padding: 0 8px 8px 35px; color: var(--subtle); font-size: 12px; line-height: 1.35; }
-.menu-switch { flex: 0 0 auto; position: relative; width: 34px; height: 20px; border-radius: 999px; background: var(--surface-5); transition: background .18s ease; }
+.user-menu-info { display: inline-grid; place-items: center; margin-left: -6px; padding: 2px; color: var(--faint); border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.user-menu-info:hover { color: var(--muted); }
+.user-menu-row > span .user-menu-info svg { color: inherit; }
+.menu-switch { flex: 0 0 auto; position: relative; width: 34px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: var(--surface-5); cursor: pointer; transition: background .18s ease; }
+.menu-switch:disabled, .menu-switch.blocked { opacity: .55; }
+.menu-switch:disabled { cursor: default; }
+.menu-switch:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .25); }
 .menu-switch b { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(var(--shadow-rgb), calc(.25 * var(--shadow-k))); transition: transform .18s ease; }
 .menu-switch.on { background: var(--green); }
 .menu-switch.on b { transform: translateX(14px); }
@@ -2539,15 +2593,15 @@ html[data-theme-transition], html[data-theme-transition] *, html[data-theme-tran
 /* Dark theme: the chat thread as its own surface. Automatic inversion flattens
    a conversation, so the message area sinks to the canvas and bubbles read as
    raised objects on it: incoming on the third surface, outgoing on the accent
-   (agency) or the portal's brand color, AI replies in the portal on a brand
-   tint strong enough to separate from the page. Activity lines, quotes and
-   the audio player follow the same layering. */
+   (agency and portal alike), AI replies in the portal on a tint of it strong
+   enough to separate from the page. Activity lines, quotes and the audio
+   player follow the same layering. */
 :root[data-theme="dark"] .messages, :root[data-theme="dark"] .inbox-messages, :root[data-theme="dark"] .portal-messages { background: var(--canvas); }
 :root[data-theme="dark"] .messages > .empty-state { background: transparent; }
 :root[data-theme="dark"] .bubble, :root[data-theme="dark"] .thinking, :root[data-theme="dark"] .inbox-message p, :root[data-theme="dark"] .portal-messages p { background: var(--surface-3); }
 :root[data-theme="dark"] .message-row.user .bubble, :root[data-theme="dark"] .inbox-message.mine p { background: var(--accent); }
-:root[data-theme="dark"] .portal-messages article.mine p { background: var(--portal-color); }
-:root[data-theme="dark"] .portal-messages article.mine.ai p { color: var(--ink); background: color-mix(in srgb, var(--portal-color) 28%, var(--surface-3)); }
+:root[data-theme="dark"] .portal-messages article.mine p { background: var(--accent); }
+:root[data-theme="dark"] .portal-messages article.mine.ai p { color: var(--ink); background: color-mix(in srgb, var(--accent) 28%, var(--surface-3)); }
 :root[data-theme="dark"] .activity-line { color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); }
 :root[data-theme="dark"] .audio-bubble, :root[data-theme="dark"] .attachment-file { border-color: var(--accent-line); background: var(--accent-soft); }
 :root[data-theme="dark"] .audio-wave i { background: var(--accent-line); }
